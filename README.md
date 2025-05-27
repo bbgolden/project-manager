@@ -1,0 +1,2 @@
+## Package management with ```uv```
+To install ```uv```, run ```powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"```. Project files can be run using ```uv run filename``` which will automatically install dependencies from ```uv.lock```.
