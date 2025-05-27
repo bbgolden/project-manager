@@ -1,7 +1,7 @@
 [project]
 name = "project-manager"
 version = "0.1.0"
-description = "Add your description here"
+description = "An agentic AI project manager platform"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
