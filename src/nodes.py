@@ -1,4 +1,3 @@
-import json
 from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 from langchain_ollama import ChatOllama
@@ -73,6 +72,8 @@ def contact_user(state: ProjectState, config: RunnableConfig) -> Command[Literal
         3. Timeline, including an overall schedule and potentially specific deliverables if the user has access to them.
 
         Determine if additional clarification is required and, if so, ask followup questions to learn more about the project. If not, leave the followup blank.
+        Prompt the user for information in all three categories to create a fuller and more comprehensive project plan. 
+        However, ask only one or two followup questions at a time to avoid overwhelming the user.
         """
     )
     response = model_with_structure.invoke([system_prompt] + state["messages"], config)
