@@ -10,7 +10,6 @@ from nodes import contact_user, clarify_input, extract_from_input, tool_node, as
 # Omit load_dotenv to disable LangSmith tracing
 load_dotenv()
 
-# remember to pass in {"messages": HumanMessage(user_input)} to initial graph.invoke
 workflow = StateGraph(ProjectState, output=OutputState)
 
 workflow.add_node("liaison", contact_user)
