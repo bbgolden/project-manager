@@ -8,10 +8,10 @@ from langgraph.prebuilt import InjectedState, ToolNode
 from langgraph.types import Command, interrupt
 from states import InputState, OverallState, OutputState
 
-model = ChatOllama(model="qwen3:8b")
+model = ChatOllama(model="llama3:latest")
 
 class DirectionalOutput(BaseModel):
-    next: str = Field(description="")
+    next: str = Field(description="This field contains the name of the agent which the user must next be redirected to.")
 
 directional_manager = model.with_structured_output(DirectionalOutput)
 
@@ -27,10 +27,10 @@ def direct_workflow(state: InputState, config: RunnableConfig) -> Command[Litera
         If none of the above apply and you cannot understand the user's request, return 'input_helper'
         """
     )
-    response = directional_manager.invoke([system_prompt, HumanMessage(state.user_input)], config=config)
+    response = directional_manager.invoke([system_prompt, HumanMessage(state["user_input"])], config=config)
 
     return Command(
-        update={"messages": [HumanMessage(state.user_input), AIMessage("Go to " + response.next)]},
+        update={"messages": [HumanMessage(state["user_input"]), AIMessage("Go to " + response.next)]},
         goto=response.next
     )
 
@@ -39,5 +39,14 @@ def clarify_direction(state: OverallState) -> InputState:
 
     return {"user_input": new_request}
 
-def create_project(state: OverallState) -> OverallState:
-    return
+def create_project(state: OverallState) -> OutputState:
+    return {"output": "Ran create_project"}
+
+def manage_schedule(state: OverallState) -> OutputState:
+    return {"output": "Ran manage_schedule"}
+
+def manage_scope(state: OverallState) -> OutputState:
+    return {"output": "Ran manage_scope"}
+
+def analyze_project(state: OverallState) -> OutputState:
+    return {"output": "Ran analyze_project"}

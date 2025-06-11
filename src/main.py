@@ -1,39 +1,35 @@
 import uuid
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph
 from langgraph.types import Command
 from langgraph.checkpoint.memory import MemorySaver
-from states import OutputState, ProjectState
-from nodes import contact_user, clarify_input, extract_from_input, tool_node, assemble_plan, should_continue
+from states import InputState, OutputState, OverallState
+from nodes import direct_workflow, clarify_direction, create_project, manage_schedule, manage_scope, analyze_project
 
 # Omit load_dotenv to disable LangSmith tracing
 load_dotenv()
 
-workflow = StateGraph(ProjectState, output=OutputState)
+workflow = StateGraph(OverallState, input=InputState, output=OutputState)
 
-workflow.add_node("liaison", contact_user)
-workflow.add_node("clarification", clarify_input)
-workflow.add_node("manager", extract_from_input)
-workflow.add_node("tools", tool_node())
-workflow.add_node("assembly", assemble_plan)
+workflow.add_node("liaison", direct_workflow)
+workflow.add_node("input_helper", clarify_direction)
+workflow.add_node("project_maker", create_project)
+workflow.add_node("scheduler", manage_schedule)
+workflow.add_node("scoper", manage_scope)
+workflow.add_node("analyst", analyze_project)
 
 workflow.set_entry_point("liaison")
-workflow.add_edge("clarification", "liaison")
-workflow.add_conditional_edges("manager", should_continue)
-workflow.add_edge("tools", "manager")
-workflow.set_finish_point("assembly")
+workflow.add_edge("input_helper", "liaison")
+workflow.set_finish_point("project_maker")
+workflow.set_finish_point("scheduler")
+workflow.set_finish_point("scoper")
+workflow.set_finish_point("analyst")
 
 checkpointer = MemorySaver()
 project_manager = workflow.compile(checkpointer=checkpointer)
 
 config = {"configurable": {"thread_id": uuid.uuid4()}}
-result = project_manager.invoke({
-    "messages": HumanMessage(input("Enter project info:")),
-    "budget_info": "",
-    "timeline_info": "",
-    "scope_info": "",
-}, config=config)
+result = project_manager.invoke({"user_input": input("What would you like to do today?")}, config=config)
 
 while True:
     try:
