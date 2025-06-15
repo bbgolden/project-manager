@@ -3,10 +3,9 @@ from dotenv import load_dotenv
 from langgraph.graph import StateGraph
 from langgraph.types import Command
 from langgraph.checkpoint.memory import MemorySaver
-from states import InputState, OutputState, OverallState
-from nodes import direct_workflow, clarify_direction, create_project, manage_schedule, manage_scope, analyze_project
+from libs.graph import InputState, OutputState, OverallState
+from libs.graph import direct_workflow, clarify_direction, create_project, manage_schedule, manage_scope, analyze_project
 
-# Omit load_dotenv to disable LangSmith tracing
 load_dotenv()
 
 workflow = StateGraph(OverallState, input=InputState, output=OutputState)
@@ -29,12 +28,16 @@ checkpointer = MemorySaver()
 project_manager = workflow.compile(checkpointer=checkpointer)
 
 config = {"configurable": {"thread_id": uuid.uuid4()}}
-result = project_manager.invoke({"user_input": input("What would you like to do today?")}, config=config)
+result = project_manager.invoke({"user_input": input("What would you like to do? ")}, config=config)
 
 while True:
     try:
-        result = project_manager.invoke(Command(resume=input(result["__interrupt__"][0].value)), config=config)
+        result = project_manager.invoke(
+            Command(
+                resume=input(result["__interrupt__"][0].value + " ")
+            ), config=config
+        )
     except KeyError:
         break
 
-print(result)
+print(result["output"])

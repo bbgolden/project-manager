@@ -6,7 +6,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState, ToolNode
 from langgraph.types import Command, interrupt
-from states import InputState, OverallState, OutputState
+from .states import InputState, OverallState, OutputState
 
 model = ChatOllama(model="llama3:latest")
 
