@@ -10,3 +10,5 @@ class OutputState(TypedDict):
 
 class OverallState(OutputState):
     messages: Annotated[Sequence[AnyMessage], add_messages]
+    redirect: str
+    followup: str
