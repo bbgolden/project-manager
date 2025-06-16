@@ -8,5 +8,6 @@ dependencies = [
     "langchain-ollama>=0.3.3",
     "langgraph>=0.4.7",
     "ollama>=0.4.9",
+    "psycopg2>=2.9.10",
     "python-dotenv>=1.1.0",
 ]
