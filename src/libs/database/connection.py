@@ -30,6 +30,7 @@ def execute(query: str):
         cur.close()
     
     if conn is not None:
+        conn.commit()
         conn.close()
 
 def select(query: str):
