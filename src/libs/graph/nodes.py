@@ -16,6 +16,10 @@ def add_project(name: str, description: str = ""):
     """Runs a SQL query to add a project to the database with the provided name and description information"""
     execute(f"INSERT INTO public.projects(name, description) VALUES('{name}', '{description}')")
 
+@tool
+def add_task(name: str, description: str, project_name: str, start, end):
+    return
+
 class DirectionalOutput(BaseModel):
     next: str = Field(description="This field contains the name of the agent which the user must next be redirected to and nothing else.")
     followup: str = Field(
