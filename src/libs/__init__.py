@@ -1,4 +1,5 @@
 from .graph import (
+    assign_workflow,
     direct_workflow, 
     clarify_input, 
     create_project,

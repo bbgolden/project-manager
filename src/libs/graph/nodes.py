@@ -18,47 +18,71 @@ def add_project(name: str, description: str = ""):
 
 @tool
 def add_task(name: str, description: str, project_name: str, start, end):
+    """placeholder"""
     return
 
-class DirectionalOutput(BaseModel):
-    next: str = Field(description="This field contains the name of the agent which the user must next be redirected to and nothing else.")
+class WorkflowOutput(BaseModel):
+    add_project: int = Field(
+        description="The number of times that the user wants to create a new project.",
+        default=0,
+    )
+    add_task: int = Field(
+        description="The number of times that the user wants to create a new task.",
+        default=0,
+    )
     followup: str = Field(
-        description="This field contains a followup question for the user to answer, if necessary.",
-        default="I'm sorry, I can't help with that. Can I do anything else for you? ",
+        description="A followup question asking the user to provide more clear information, if necessary.",
+        default="",
     )
 
+class DirectionalOutput(BaseModel):
+    followup: str = Field(description="A followup question for the user to answer and give further clarification, if necessary.")
+
+queue_builder = model.with_structured_output(WorkflowOutput)
 directional_manager = model.with_structured_output(DirectionalOutput)
 
 project_maker_tools = [add_project]
 project_maker = model.bind_tools(project_maker_tools)
 
-def direct_workflow(state: InputState, config: RunnableConfig) -> Command[Literal["project_maker_check", "scheduler", "scoper", "analyst", "input_helper"]]:
+def assign_workflow(state: InputState, config: RunnableConfig) -> Command[Literal["supervisor", "input_helper"]]:
+    new_messages = [HumanMessage(state["user_input"])]
+
     system_prompt = SystemMessage(
         """
-        You are an AI that determines which agent a user must be redirected to based on their request.
-        Your possible outputs are limited to the enumerated values as follows:
-        If the user wants to make a new project, return 'project_maker_check'
-        If the user wants to modify information pertaining to the project's timeline, tasks, or resources, return 'scheduler_check'
-        If the user wants to modify information related to the project's description, requirements, or end goal, return 'scoper_check'
-        If the user wants to access information or ask questions about the project, return 'analyst_check'
-        If none of the above apply and you cannot understand the user's request, return 'input_helper'
-        If and only if you return 'input_helper', also return a followup question that respectfully asks the user for a more clear request 
+        You are an AI that determines which project management tools the user wants to utilize and how many times they wish to utilize each tool.
+        This does not refer to external tools, but rather internal ones like creating a project, adding tasks, etc.
+        Based on the user's request, return the appropriate number of tools calls for each tool at your disposal.
+        If and only if you cannot understand the user's request, return a followup question that respectfully asks the user to give a different request.
         """
     )
-    response = directional_manager.invoke([system_prompt, HumanMessage(state["user_input"])], config=config)
+    response = queue_builder.invoke([system_prompt] + new_messages, config=config)
 
-    new_messages = [HumanMessage(state["user_input"])]
-    if response.next == "input_helper":
+    if response.followup:
         new_messages.append(AIMessage(response.followup))
 
+    tool_queue = list[str]()
+    for i in range(response.add_project):
+        tool_queue.append("project_maker_check")
+    for i in range(response.add_task):
+        tool_queue.append("scheduler")
+
     return Command(
-        update={"messages": new_messages,
-                "redirect": "liaison",
-                "followup": response.followup
-        }, goto=response.next,
+        update={
+            "messages": new_messages,
+            "tool_queue": tool_queue,
+            "redirect": "liaison",
+            "followup": response.followup
+        }, goto="input_helper" if response.followup else "supervisor"
     )
 
-def clarify_input(state: OverallState) -> Command[Literal["liaison"]]:
+
+def direct_workflow(state: OverallState) -> Command[Literal["project_maker_check", "scheduler", "scoper", "analyst"]]:
+    return Command(
+        update={"tool_queue": state["tool_queue"][1:]},
+        goto=state["tool_queue"][0],
+    )
+
+def clarify_input(state: OverallState) -> Command[Literal["liaison", "project_maker_check"]]:
     new_request = interrupt(state["followup"])
 
     return Command(
@@ -69,7 +93,7 @@ def clarify_input(state: OverallState) -> Command[Literal["liaison"]]:
 def create_project_check(state: OverallState, config: RunnableConfig) -> Command[Literal["project_maker", "input_helper"]]:
     system_prompt = SystemMessage(
         """
-        You are helping to create a new project. 
+        You are helping to create a new project. If the user wants to create multiple, approach them one at a time.
         Determine whether the provided message history has sufficient information about both the project's name and description.
         If you determine that there is not enough information about these factors, return a followup question that respectfully asks for specific further details
         If you determine that there is sufficient information, return only an empty string. Only do this once information about both name and description are present.
@@ -80,8 +104,8 @@ def create_project_check(state: OverallState, config: RunnableConfig) -> Command
     return Command(
         update={
             "redirect": "project_maker_check",
-            "followup": response.next
-        }, goto="input_helper" if response.next else "project_maker"
+            "followup": response.followup
+        }, goto="input_helper" if response.followup else "project_maker"
     )
 
 def create_project(state: OverallState, config: RunnableConfig) -> OverallState:
@@ -112,4 +136,6 @@ def analyze_project(state: OverallState) -> OutputState:
 def should_finish(state: OverallState):
     if state["messages"][-1].tool_calls:
         return "tools"
+    elif state["tool_queue"]:
+        return "loop"
     return "end"

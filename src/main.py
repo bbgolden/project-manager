@@ -5,6 +5,7 @@ from langgraph.types import Command
 from langgraph.checkpoint.memory import MemorySaver
 from libs.graph import InputState, OutputState, OverallState
 from libs.graph import (
+    assign_workflow,
     direct_workflow, 
     clarify_input, 
     create_project,
@@ -20,7 +21,8 @@ load_dotenv()
 
 workflow = StateGraph(OverallState, input=InputState, output=OutputState)
 
-workflow.add_node("liaison", direct_workflow)
+workflow.add_node("liaison", assign_workflow)
+workflow.add_node("supervisor", direct_workflow)
 workflow.add_node("input_helper", clarify_input)
 workflow.add_node("project_maker", create_project)
 workflow.add_node("project_maker_check", create_project_check)
@@ -35,8 +37,9 @@ workflow.add_conditional_edges(
     should_finish,
     {
         "tools": "project_maker_tools",
+        "loop": "supervisor",
         "end": END,
-    }
+    },
 )
 workflow.add_edge("project_maker_tools", "project_maker")
 workflow.set_finish_point("scheduler")
