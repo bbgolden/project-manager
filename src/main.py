@@ -11,10 +11,15 @@ from libs.graph import (
     create_project,
     create_project_check,
     create_project_tools, 
-    manage_schedule, 
+    create_task,
+    create_task_check,
+    create_task_tools,
+    manage_resources,
+    manage_resources_check,
+    manage_resources_tools, 
     manage_scope, 
     analyze_project,
-    should_finish
+    should_finish,
 )
 
 load_dotenv()
@@ -27,7 +32,12 @@ workflow.add_node("input_helper", clarify_input)
 workflow.add_node("project_maker", create_project)
 workflow.add_node("project_maker_check", create_project_check)
 workflow.add_node("project_maker_tools", create_project_tools())
-workflow.add_node("scheduler", manage_schedule)
+workflow.add_node("task_maker", create_task)
+workflow.add_node("task_maker_check", create_task_check)
+workflow.add_node("task_maker_tools", create_task_tools())
+workflow.add_node("resource_manager", manage_resources)
+workflow.add_node("resource_manager_check", manage_resources_check)
+workflow.add_node("resource_manager_tools", manage_resources_tools())
 workflow.add_node("scoper", manage_scope)
 workflow.add_node("analyst", analyze_project)
 
@@ -42,7 +52,26 @@ workflow.add_conditional_edges(
     },
 )
 workflow.add_edge("project_maker_tools", "project_maker")
-workflow.set_finish_point("scheduler")
+workflow.add_conditional_edges(
+    "task_maker", 
+    should_finish,
+    {
+        "tools": "task_maker_tools",
+        "loop": "supervisor",
+        "end": END,
+    },
+)
+workflow.add_edge("task_maker_tools", "task_maker")
+workflow.add_conditional_edges(
+    "resource_manager", 
+    should_finish,
+    {
+        "tools": "resource_manager_tools",
+        "loop": "supervisor",
+        "end": END,
+    },
+)
+workflow.add_edge("resource_manager_tools", "resource_manager")
 workflow.set_finish_point("scoper")
 workflow.set_finish_point("analyst")
 
