@@ -8,7 +8,8 @@ class InputState(TypedDict):
 class OutputState(TypedDict):
     output: str
 
-class OverallState(OutputState):
+class OverallState(InputState, OutputState):
     messages: Annotated[Sequence[AnyMessage], add_messages]
+    tool_queue: list[str]
     redirect: str
     followup: str
