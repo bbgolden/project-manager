@@ -11,8 +11,10 @@ from .nodes import (
     manage_resources,
     manage_resources_check,
     manage_resources_tools, 
-    manage_scope, 
+    manage_scope,
     analyze_project,
+    suggest_next,
+    suggest_commit,
     should_finish,
 )
 from .states import InputState, OutputState, OverallState
