@@ -33,7 +33,7 @@ def execute(query: str):
         conn.commit()
         conn.close()
 
-def select(query: str):
+def select(query: str) -> list[tuple[int | str]]:
     conn, cur = get_cursor()
     result = []
 
