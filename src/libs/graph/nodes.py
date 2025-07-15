@@ -40,6 +40,14 @@ def add_task(name: str, project_name: str, description: str = "NULL", start_date
     execute(f"INSERT INTO public.tasks(name, description, project_id, start, \"end\") VALUES('{name}', {description}, {project_id}, '{start_date}', {end_date})")
 
 @tool
+def add_task_dependency(task1_name: str, task2_name: str, description: str):
+    """Adds a new task dependency. Task 2 is dependent on Task 1 if Task 1 must be finished before Task 2 can be completed."""
+    task1_id = select(f"SELECT task_id FROM public.tasks WHERE name = '{task1_name}'")[0][0]
+    task2_id = select(f"SELECT task_id FROM public.tasks WHERE name = '{task2_name}'")[0][0]
+
+    execute(f"INSERT INTO public.task_dependencies(task_id, dependent_id, description) VALUES('{task1_id}', '{task2_id}', '{description}')")
+
+@tool
 def add_resource(first_name: str, contact: str, last_name: str = "NULL"):
     """Adds a new resource. A resource is a named person who contributes to a task."""
     if last_name != "NULL":
@@ -74,6 +82,10 @@ class WorkflowOutput(BaseModel):
         description="The number of times that the user wants to create a new task.",
         default=0,
     )
+    add_task_dependency: int = Field(
+        description="The number of times that the user wants to add a task dependency. Task 2 is dependent on Task 1 if Task 1 must be finished before Task 2 can be completed.",
+        default=0,
+    )
     add_resource: int = Field(
         description="The number of times that the user wants to create a new resource.",
         default=0,
@@ -93,14 +105,31 @@ class DirectionalOutput(BaseModel):
 queue_builder = model.with_structured_output(WorkflowOutput)
 directional_manager = model.with_structured_output(DirectionalOutput)
 
-project_maker_tools = [add_project, add_requirement]
+project_maker_tools = [add_project]
 project_maker = model.bind_tools(project_maker_tools)
+
+req_maker_tools = [add_requirement]
+req_maker = model.bind_tools(req_maker_tools)
 
 task_maker_tools = [add_task]
 task_maker = model.bind_tools(task_maker_tools)
 
+dep_maker_tools = [add_task_dependency]
+dep_maker = model.bind_tools(dep_maker_tools)
+
 resource_manager_tools = [add_resource, assign_resource]
 resource_manager = model.bind_tools(resource_manager_tools)
+
+# Threshold for "unvaluable" response from agents (characters)
+value_thresh = 30
+tool_to_direction = {
+        "add_project": "project_maker_check",
+        "add_requirement": "req_maker_check",
+        "add_task": "task_maker_check",
+        "add_task_dependency": "dep_maker_check",
+        "add_resource": "resource_manager_check",
+        "assign_resource": "resource_manager_check",
+}
 
 def assign_workflow(state: OverallState, config: RunnableConfig) -> Command[Literal["supervisor", "clarification"]]:
     new_messages = [HumanMessage(state["user_input"])]
@@ -110,40 +139,45 @@ def assign_workflow(state: OverallState, config: RunnableConfig) -> Command[Lite
         You are an AI that determines which project management functions the user wants to utilize and how many times they wish to utilize each function.
         This does not refer to external function, but rather internal ones like creating a project, adding tasks, etc.
         Do not explicitly ask the user for which functions they would like to use. It is your job to inference that information from their messages.
+        The following are functions the user may want to use and how to identify them.
+
+        Adding a new project - The user states that they want to create a new project and provides a name or description for it.
+        Adding a new requirement to a project - The user states that they want to add a requirement to a project or mentions the project by name.
+        Adding a new task - The user states that they want to add a task or add a task to a project and uses identification by name.
+        Adding a new task dependency - The user states that they want to make a task dependent on another or that they want to make a dependency.
+        Adding a new resource - The user states that they want to add a resource or mentions a name that fits the conventions for a human name.
+        Assigning a resource - The user states that they want to assign a resource to a task or mentions the task by name.
+
         Based on the user's request, return the appropriate number of function calls for each function at your disposal.
         If and only if you cannot understand the user's request, return a followup question (in the form of a comprehensible sentence) that respectfully asks the user to give a different request.
         """
     )
-    response = queue_builder.invoke([system_prompt] + state["messages"] + new_messages, config=config)
+    response = queue_builder.invoke([system_prompt] + state["messages"] + new_messages, config=config).model_dump()
 
-    if len(response.followup) > 30:
-        new_messages.append(AIMessage(response.followup))
+    if len(response["followup"]) > value_thresh:
+        new_messages.append(AIMessage(response["followup"]))
 
     tool_queue = list[str]()
-    for i in range(response.add_project + response.add_requirement):
-        tool_queue.append("project_maker_check")
-    for i in range(response.add_task):
-        tool_queue.append("task_maker_check")
-    for i in range(response.add_resource + response.assign_resource):
-        tool_queue.append("resource_manager_check")
+    for tool, direction in tool_to_direction.items():
+        tool_queue.extend([direction] * response[tool])
 
     return Command(
         update={
             "messages": new_messages,
             "tool_queue": tool_queue,
             "prev": "liaison",
-            "followup": response.followup,
-        }, goto="clarification" if len(response.followup) > 30 else "supervisor"
+            "followup": response["followup"],
+        }, goto="clarification" if len(response["followup"]) > value_thresh else "supervisor",
     )
 
 
-def direct_workflow(state: OverallState) -> Command[Literal["project_maker_check", "task_maker_check", "resource_manager_check", "scoper", "analyst"]]:
+def direct_workflow(state: OverallState) -> Command[Literal["project_maker_check", "req_maker_check", "task_maker_check", "dep_maker_check", "resource_manager_check", "scoper", "analyst", "suggestion_commit"]]:
     return Command(
         update={"tool_queue": state["tool_queue"][1:]},
-        goto=state["tool_queue"][0],
+        goto=state["tool_queue"][0] if state["tool_queue"] else "suggestion_commit",
     )
 
-def clarify_input(state: OverallState) -> Command[Literal["liaison", "project_maker_check", "task_maker_check", "resource_manager_check", "suggestion_commit"]]:
+def clarify_input(state: OverallState) -> Command[Literal["liaison", "project_maker_check", "req_maker_check", "task_maker_check", "dep_maker_check", "resource_manager_check", "suggestion_commit"]]:
     new_request = interrupt(state["followup"])
 
     return Command(
@@ -155,21 +189,12 @@ def create_project_check(state: OverallState, config: RunnableConfig) -> Command
     system_prompt = SystemMessage(
         """
         You are helping to make projects in a project management application.
-        You may be asked to either create a new project or add requirements to an existing project.
-        Requirements are defined as conditions or capabilities that must be fulfilled for a project to be successful.
-        If the user wants to perform both of these functions, or multiple of each, approach them one at a time.
         Remember that you are only gathering information, not performing the actual tasks themselves. 
         Thus, do not remark on when a task has been completed, only ask for confirmation whether your information is correct.
 
-        If the user wants to create a new project, determine whether the provided message history has sufficient information about both the project's name and description.
+        Determine whether the provided message history has sufficient information about both the project's name and description.
         If you determine that there is not enough information about these factors, return a followup question that respectfully asks for specific further details.
         Before taking this step, ensure that the information you are asking for is not already provided by the user.
-        Once you determine that there is sufficient information, make sure to ask the user if they would like to specify any additional requirements for the project.
-        If they do, follow the steps to add a new requirement by asking followup questions.
-        If not, return only an empty string and nothing else.
-
-        If the user wants to add requirements to an existing project, determine whether the provided message history has sufficient information about the name of the project that the requirement belongs to and a description of the requirement.
-        If you determine that there is not enough information about these factors, return a followup question that respectfully asks for specific further details.
         Once you determine that there is sufficient information, return only an empty string and nothing else.
         """
     )
@@ -179,28 +204,19 @@ def create_project_check(state: OverallState, config: RunnableConfig) -> Command
         update={
             "prev": "project_maker_check",
             "followup": response.followup,
-        }, goto="clarification" if len(response.followup) > 30 else "project_maker"
+        }, goto="clarification" if len(response.followup) > value_thresh else "project_maker",
     )
 
 def create_project(state: OverallState, config: RunnableConfig) -> Command[Literal["project_maker_tools", "suggestion"]]:
     system_prompt = SystemMessage(
         """
         You are helping to make projects in a project management application.
-        You may be asked to either create a new project or add requirements to an existing project.
-        Requirements are defined as conditions or capabilities that must be fulfilled for a project to be successful.
 
-        If the user wants to create a new project, you need information about the project's name and description from the given message history.
+        To create a new project, you need information about the project's name and description from the given message history.
         The project's name absolutely must be quoted directly from the user's messages. 
         The description should be formatted as a properly capitalized and punctuated paragraph that could be read without additional context. It should be in the third-person.
 
-        If the user wants to add a requirement to an existing project, you need information about the name of the project which the requirement belongs to and the description of the requirement from the given message history.
-        The name of the project which the requirement belongs absolutely must be quoted directly from the user's messages.
-        The description should be formatted as a properly capitalized and punctuated paragraph that could be read without additional context. It should be in the third-person.
-        
-        Call the appropriate tools based on the information present in the user's most recent messages.
-        Make sure that you perform all tasks (e.g. adding projects, adding requirements) that have not yet been completed (meaning that the appropriate tool has not yet been called)
-        If, based on these messages, you determine you must both create a new project and add a requirement to it, ensure that you create the project first.
-        You must not add any details that the user does not mention, such as names.
+        You must not add any details that the user does not explicitly mention, such as names.
         """
     )
     response = project_maker.invoke([system_prompt] + state["messages"], config=config)
@@ -213,6 +229,50 @@ def create_project(state: OverallState, config: RunnableConfig) -> Command[Liter
 def create_project_tools():
     return ToolNode(project_maker_tools)
 
+def create_req_check(state: OverallState, config: RunnableConfig) -> Command[Literal["req_maker", "clarification"]]:
+    system_prompt = SystemMessage(
+        """
+        You are helping to add requirements to an existing project in a project management application.
+        Requirements are defined as conditions or capabilities that must be fulfilled for a project to be successful.
+        Remember that you are only gathering information, not performing the actual tasks themselves. 
+        Thus, do not remark on when a task has been completed, only ask for confirmation whether your information is correct.
+
+        Determine whether the provided message history has sufficient information regarding the description of the requirement and the name of the project that it belongs to.
+        If you determine that there is not enough information regarding these factors, return a followup question that respectfully asks the user for more details.
+        Once you determine that there is sufficient information, return only an empty string and nothing else.
+        """
+    )
+    response = directional_manager.invoke([system_prompt] + state["messages"], config=config)
+
+    return Command(
+        update={
+            "prev": "req_maker_check",
+            "followup": response.followup,
+        }, goto="clarification" if len(response.followup) > value_thresh else "req_maker",
+    )
+
+def create_req(state: OverallState, config: RunnableConfig) -> Command[Literal["req_maker_tools", "suggestion"]]:
+    system_prompt = SystemMessage(
+        """
+        You are helping to add requirements to an existing project in a project management application.
+        Requirements are defined as conditions or capabilities that must be fulfilled for a project to be successful.
+
+        To create a new requirement, you need a description of the requirement and the name of the project that it belongs to.
+        The description should be formatted as a properly capitalized and punctuated paragraph that could be read without additional context. It should be in the third-person.
+
+        You must not add any details that the user does not explicitly mention, such as names.
+        """
+    )
+    response = req_maker.invoke([system_prompt] + state["messages"], config=config)
+
+    return Command(
+        update={"messages": [response]},
+        goto="req_maker_tools" if response.tool_calls else "suggestion",
+    )
+
+def create_req_tools():
+    return ToolNode(req_maker_tools)
+
 def create_task_check(state: OverallState, config: RunnableConfig) -> Command[Literal["task_maker", "clarification"]]:
     system_prompt = SystemMessage(
         """
@@ -220,6 +280,7 @@ def create_task_check(state: OverallState, config: RunnableConfig) -> Command[Li
         Do not concern yourself with any information not pertaining to the creation of a task.
         Remember that you are only gathering information, not performing the actual tasks themselves. 
         Thus, do not remark on when a task has been completed, only ask for confirmation whether your information is correct.
+
         Determine whether the provided message history has sufficient information about the task's name, description, the name of the project it belongs to, and optionally its start and end date.
         If you determine that there is not enough information about these factors, return a followup question that respectfully asks for specific further details. 
         Before taking this step, ensure that the information you are asking for is not already provided by the user. 
@@ -236,7 +297,7 @@ def create_task_check(state: OverallState, config: RunnableConfig) -> Command[Li
         update={
             "prev": "task_maker_check",
             "followup": response.followup,
-        }, goto="clarification" if len(response.followup) > 30 else "task_maker"
+        }, goto="clarification" if len(response.followup) > value_thresh else "task_maker",
     )
 
 def create_task(state: OverallState, config: RunnableConfig) -> Command[Literal["task_maker_tools", "suggestion"]]:
@@ -253,7 +314,7 @@ def create_task(state: OverallState, config: RunnableConfig) -> Command[Literal[
         If the start date is not explicitly mentioned, you may assume that it is today's date.
         If the end date is not explicitly mentioned, try to infer it based on the information provided by the user and your knowledge of today's date.
         The name of the project that the task belongs to absolutely must be quoted directly from the user's messages.
-        You must not add any details that the user does not mention, such as names.
+        You must not add any details that the user does not explicitly mention, such as names.
         """
     )
     response = task_maker.invoke([system_prompt] + state["messages"], config=config)
@@ -265,6 +326,53 @@ def create_task(state: OverallState, config: RunnableConfig) -> Command[Literal[
 
 def create_task_tools():
     return ToolNode(task_maker_tools)
+
+
+def create_dependency_check(state: OverallState, config: RunnableConfig) -> Command[Literal["dep_maker", "clarification"]]:
+    system_prompt = SystemMessage(
+        """
+        You are helping to add task dependencies to a project as part of a project management software.
+        Task 2 is defined as being dependent on Task 1 if Task 1 must be finished before Task 2 can be completed.
+        Remember that you are only gathering information, not performing the actual tasks themselves. 
+        Thus, do not remark on when a task has been completed, only ask for confirmation whether your information is correct.
+
+        Determine whether the provided message history has sufficient information regarding the names of both tasks and a description of how or why one task is dependent on the other.
+        If you determine that there is not enough information regarding these factors, return a followup question that respectfully asks the user for more details.
+        Make sure to ask the user which task is dependent on the other if it is not clearly stated to avoid confusion.
+        Once you determine that there is sufficient information, return only an empty string and nothing else.
+        """
+    )
+    response = directional_manager.invoke([system_prompt] + state["messages"], config=config)
+
+    return Command(
+        update={
+            "prev": "dep_maker_check",
+            "followup": response.followup,
+        }, goto="clarification" if len(response.followup) > value_thresh else "dep_maker",
+    )
+
+def create_dependency(state: OverallState, config: RunnableConfig) -> Command[Literal["dep_maker_tools", "suggestion"]]:
+    system_prompt = SystemMessage(
+        """
+        You are helping to add task dependencies to a project as part of a project management software.
+        Task 2 is defined as being dependent on Task 1 if Task 1 must be finished before Task 2 can be completed.
+
+        To add a task dependency, you need the names of both tasks and a description of how or why one task is dependent on the other.
+        Make sure that you clearly identify which task is dependent from the given message history.
+        The description should be formatted as a properly capitalized and punctuated paragraph that could be read without additional context. It should be in the third-person.
+
+        You must not add any details that the user does not explicitly mention, such as names.
+        """
+    )
+    response = dep_maker.invoke([system_prompt] + state["messages"], config=config)
+
+    return Command(
+        update={"messages": [response]},
+        goto="dep_maker_tools" if response.tool_calls else "suggestion",
+    )
+
+def create_dependency_tools():
+    return ToolNode(dep_maker_tools)
 
 def manage_resources_check(state: OverallState, config: RunnableConfig) -> Command[Literal["resource_manager", "clarification"]]:
     system_prompt = SystemMessage(
@@ -278,10 +386,8 @@ def manage_resources_check(state: OverallState, config: RunnableConfig) -> Comma
 
         To create a new resource, determine whether the provided message history has sufficient information regarding the resource's first name, (optionally) its last name, and its contact information.
         If you determine that there is not enough information regarding these factors, return a followup question that respectfully asks the user for more details.
-        Ensure that you get information about the resource's contact information, preferably an email address.
-        Once you determine that there is sufficient information, make sure to ask the user if they would like to also assign this resource to an existing task as a followup question.
-        If so, follow the steps to get the appropriate information by asking followup questions.
-        If not, return only an empty string and nothing else.
+        Make sure to ask the user for the resource's contact information if it is not clearly stated. It should preferably be an email address.
+        Once you determine that there is sufficient information, return only an empty string and nothing else.
 
         To assign an existing resource to a task, determine whether the provided message history has sufficient information regarding the resource's first and (optionally) last name as well as the name of the task to which the resource must be assigned.
         If you determine that there is not enough information regarding these factors, return a followup question that respectfully asks the user for more details.
@@ -294,7 +400,7 @@ def manage_resources_check(state: OverallState, config: RunnableConfig) -> Comma
         update={
             "prev": "resource_manager_check",
             "followup": response.followup,
-        }, goto="clarification" if len(response.followup) > 30 else "resource_manager"
+        }, goto="clarification" if len(response.followup) > value_thresh else "resource_manager",
     )
 
 def manage_resources(state: OverallState, config: RunnableConfig) -> Command[Literal["resource_manager_tools", "suggestion"]]:
@@ -311,9 +417,9 @@ def manage_resources(state: OverallState, config: RunnableConfig) -> Command[Lit
         To assign an existing resource to a task, you need the resource's first name and, if present, last name as well as the name of the task to assign to.
         All of these values absolutely must be quoted directly from the user's messages.
 
-        Call the appropriate tools based on the information present in the user's most recent messages. If the last name is unknown, do not pass any argument to the tools you are using.
+        Call the appropriate tools based on the information present in the user's most recent messages.
         If, based on these messages, you determine you must both create and assign a resource, ensure that you create the resource first.
-        You must not add any details that the user does not mention, such as names.
+        You must not add any details that the user does not explicitly mention, such as names.
         """
     )
     response = resource_manager.invoke([system_prompt] + state["messages"], config=config)
@@ -332,7 +438,7 @@ def manage_scope(state: OverallState) -> OutputState:
 def analyze_project(state: OverallState) -> OutputState:
     return {"output": "Ran analyze_project"}
 
-def suggest_next(state: OverallState, config: RunnableConfig) -> OverallState:
+def suggest_next(state: OverallState, config: RunnableConfig) -> Command[Literal["clarification", "supervisor"]]:
     system_prompt = SystemMessage(
         f"""
         You are helping the user to create and manage their projects as part of a project management software.
@@ -341,18 +447,26 @@ def suggest_next(state: OverallState, config: RunnableConfig) -> OverallState:
 
         Adding a new project - recommended secondary functions are adding a new requirement
         Adding a new requirement - there are no recommended secondary functions
-        Adding a new task - recommended secondary functions are adding a new resource and assigning a resource to that task
+        Adding a new task - recommended secondary functions are adding a new task dependency, adding a new resource, and assigning a resource to that task
+        Adding a new task dependency - there are no recommended secondary functions
         Adding a new resource - recommended secondary functions are assigning that resource to a task
-        Assigning a new resource - there are no recommended secondary functions
+        Assigning a resource - there are no recommended secondary functions
 
         The user's most recently used function is {state["prev"]}
-        Take into consideration this information, their most recent messages, and the above list.
-        Return a followup question using context from the conversation that respectfully asks the user whether they would like to utilize an appropriate secondary function.
+        Take into consideration this information, recent message context, and the above list.
+        Also consider any questions asked in the AI message after the latest tool call.
+        Return a followup question using these factors that respectfully asks the user whether they would like to utilize an appropriate secondary function.
+        Ensure that the question is formatted as a proper sentence.
         """
     )
     response = directional_manager.invoke([system_prompt] + state["messages"], config=config)
 
-    return {"prev": "suggestion_commit", "followup": response.followup}
+    return Command(
+        update={
+            "prev": "suggestion_commit", 
+            "followup": response.followup,
+        }, goto="clarification" if len(response.followup) > value_thresh else "supervisor",
+    )
 
 def suggest_commit(state: OverallState, config: RunnableConfig) -> OverallState:
     system_prompt = SystemMessage(
@@ -365,17 +479,16 @@ def suggest_commit(state: OverallState, config: RunnableConfig) -> OverallState:
         Remember that it is possible that the user may not wish to use any tools at all.
         """
     )
-    response = queue_builder.invoke([system_prompt] + state["messages"][-2:], config=config)
+    response = queue_builder.invoke([system_prompt] + state["messages"][-2:], config=config).model_dump()
 
     new_tools = list[str]()
-    for i in range(response.add_project + response.add_requirement):
-        new_tools.append("project_maker_check")
-    for i in range(response.add_task):
-        new_tools.append("task_maker_check")
-    for i in range(response.add_resource + response.assign_resource):
-        new_tools.append("resource_manager_check")
+    for tool, direction in tool_to_direction.items():
+        new_tools.extend([direction] * response[tool])
 
-    return {"tool_queue": new_tools + state["tool_queue"], "output": "Runtime complete"}
+    return {
+        "tool_queue": new_tools + state["tool_queue"], 
+        "output": "New tools added: " + (", ".join(new_tools) if new_tools else "None"),
+    }
 
 def should_finish(state: OverallState):
     if state["tool_queue"]:
