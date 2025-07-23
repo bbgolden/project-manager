@@ -3,23 +3,15 @@ from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from langgraph.types import Command
 from langgraph.checkpoint.memory import MemorySaver
-from libs.graph import InputState, OutputState, OverallState
-from libs.graph import (
+from core.graph import InputState, OutputState, OverallState
+from core.graph import (
     assign_workflow,
     direct_workflow, 
     clarify_input, 
     create_project,
-    create_project_check,
-    create_project_tools, 
     create_req,
-    create_req_check,
-    create_req_tools, 
     create_task,
-    create_task_check,
-    create_task_tools,
-    create_dependency,
-    create_dependency_check,
-    create_dependency_tools,
+    create_dep,
     manage_resources,
     manage_resources_check,
     manage_resources_tools,   
@@ -38,17 +30,9 @@ workflow.add_node("liaison", assign_workflow)
 workflow.add_node("supervisor", direct_workflow)
 workflow.add_node("clarification", clarify_input)
 workflow.add_node("project_maker", create_project)
-workflow.add_node("project_maker_check", create_project_check)
-workflow.add_node("project_maker_tools", create_project_tools())
 workflow.add_node("req_maker", create_req)
-workflow.add_node("req_maker_check", create_req_check)
-workflow.add_node("req_maker_tools", create_req_tools())
 workflow.add_node("task_maker", create_task)
-workflow.add_node("task_maker_check", create_task_check)
-workflow.add_node("task_maker_tools", create_task_tools())
-workflow.add_node("dep_maker", create_dependency)
-workflow.add_node("dep_maker_check", create_dependency_check)
-workflow.add_node("dep_maker_tools", create_dependency_tools())
+workflow.add_node("dep_maker", create_dep)
 workflow.add_node("resource_manager", manage_resources)
 workflow.add_node("resource_manager_check", manage_resources_check)
 workflow.add_node("resource_manager_tools", manage_resources_tools())
@@ -58,10 +42,10 @@ workflow.add_node("scoper", manage_scope)
 workflow.add_node("analyst", analyze_project)
 
 workflow.set_entry_point("liaison")
-workflow.add_edge("project_maker_tools", "project_maker")
-workflow.add_edge("req_maker_tools", "req_maker")
-workflow.add_edge("task_maker_tools", "task_maker")
-workflow.add_edge("dep_maker_tools", "dep_maker")
+workflow.add_edge("project_maker", "suggestion")
+workflow.add_edge("req_maker", "suggestion")
+workflow.add_edge("task_maker", "suggestion")
+workflow.add_edge("dep_maker", "suggestion")
 workflow.add_edge("resource_manager_tools", "resource_manager")
 workflow.set_finish_point("scoper")
 workflow.set_finish_point("analyst")
@@ -78,7 +62,7 @@ checkpointer = MemorySaver()
 project_manager = workflow.compile(checkpointer=checkpointer)
 
 config = {"configurable": {"thread_id": uuid.uuid4()}}
-result = project_manager.invoke({"user_input": input("What would you like to do? ")}, config=config)
+result = project_manager.invoke({"user_input": input("")}, config=config)
 
 while True:
     try:

@@ -1,6 +1,7 @@
 import os
 import psycopg2
 from dotenv import load_dotenv
+from._formatting import format_sql_query
 
 load_dotenv()
 
@@ -22,23 +23,35 @@ def get_cursor():
     finally:
         return conn, cur
 
-def execute(query: str):
+def execute(query: str, *args):
     conn, cur = get_cursor()
+    formatted_query = format_sql_query(query, *args)
 
     if cur is not None:
-        cur.execute(query)
+        cur.execute(formatted_query)
         cur.close()
     
     if conn is not None:
         conn.commit()
         conn.close()
 
-def select(query: str) -> list[tuple[int | str]]:
+def select(query: str, *args) -> list[tuple[int | str]]:
+    """
+    Given query is formatted with sanitized arguments.
+
+    For argument **val** with index *i* in the packed tuple, any instances of !p*i* in the query string will be replaced with **val**.  
+    Indexing begins at 1.
+    ```
+    # Equivalent to "SELECT * FROM table WHERE id = 5 AND count = 5"
+    select("SELECT * FROM table WHERE id = !p1 AND count = !p1", 5)
+    ```
+    """
     conn, cur = get_cursor()
     result = []
+    formatted_query = format_sql_query(query, *args)
 
     if cur is not None:
-        cur.execute(query)
+        cur.execute(formatted_query)
         result = cur.fetchall()
 
     if conn is not None:
