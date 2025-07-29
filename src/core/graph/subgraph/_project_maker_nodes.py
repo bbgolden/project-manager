@@ -83,7 +83,7 @@ def create_project_dialogue(state: ProjectMakerState, config: RunnableConfig) ->
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_project_tools():
+def create_project_dialogue_tools():
     return ToolNode(project_maker_tools)
 
 def create_project_commit(state: ProjectMakerState) -> OutputState:

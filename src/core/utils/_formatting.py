@@ -1,6 +1,6 @@
 import re
 
-def sanitize(arg: int | str = None) -> str:
+def sanitize(arg: int | str) -> str:
     """
     Sanitizes argument for use in Postgres SQL queries.
     - Converts falsy values to NULL

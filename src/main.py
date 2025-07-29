@@ -12,9 +12,8 @@ from core.graph import (
     create_req,
     create_task,
     create_dep,
-    manage_resources,
-    manage_resources_check,
-    manage_resources_tools,   
+    create_resource,
+    assign_resource, 
     manage_scope, 
     analyze_project,
     suggest_next,
@@ -33,9 +32,8 @@ workflow.add_node("project_maker", create_project)
 workflow.add_node("req_maker", create_req)
 workflow.add_node("task_maker", create_task)
 workflow.add_node("dep_maker", create_dep)
-workflow.add_node("resource_manager", manage_resources)
-workflow.add_node("resource_manager_check", manage_resources_check)
-workflow.add_node("resource_manager_tools", manage_resources_tools())
+workflow.add_node("resource_maker", create_resource)
+workflow.add_node("resource_assigner", assign_resource)
 workflow.add_node("suggestion", suggest_next)
 workflow.add_node("suggestion_commit", suggest_commit)
 workflow.add_node("scoper", manage_scope)
@@ -46,7 +44,8 @@ workflow.add_edge("project_maker", "suggestion")
 workflow.add_edge("req_maker", "suggestion")
 workflow.add_edge("task_maker", "suggestion")
 workflow.add_edge("dep_maker", "suggestion")
-workflow.add_edge("resource_manager_tools", "resource_manager")
+workflow.add_edge("resource_maker", "suggestion")
+workflow.add_edge("resource_assigner", "suggestion")
 workflow.set_finish_point("scoper")
 workflow.set_finish_point("analyst")
 workflow.add_conditional_edges(

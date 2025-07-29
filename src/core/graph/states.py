@@ -48,3 +48,17 @@ class DependencyMakerState(SubgraphState):
     task2_name: str
     task2_desc: str
     dep_desc: str
+
+class ResourceMakerState(SubgraphState):
+    existing_contacts: list[str]
+    contact: str
+    first_name: str
+    last_name: str
+
+class ResourceAssignerState(SubgraphState):
+    existing_tasks: list[str]
+    matching_resources: list[tuple[str]]
+    task_name: str
+    re_first_name: str
+    re_last_name: str
+    re_contact: str

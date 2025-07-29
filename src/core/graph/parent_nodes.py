@@ -8,22 +8,60 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode
 from langgraph.types import Command, interrupt
 from langgraph.graph import StateGraph
-from .states import OverallState, ProjectMakerState, ReqMakerState, TaskMakerState, DependencyMakerState, OutputState
-from .subgraph._project_maker_nodes import create_project_context, create_project_dialogue, create_project_tools, create_project_commit
-from .subgraph._req_maker_nodes import create_req_context, create_req_context_tools, create_req_dialogue, create_req_dialogue_tools, create_req_commit
-from .subgraph._task_maker_nodes import create_task_context, create_task_context_tools, create_task_dialogue, create_task_dialogue_tools, create_task_commit
-from .subgraph._dep_maker_nodes import create_dep_context, create_dep_context_tools, create_dep_dialogue, create_dep_dialogue_tools, create_dep_commit
+from .states import (
+    OverallState,
+    SubgraphState, 
+    ProjectMakerState, 
+    ReqMakerState, 
+    TaskMakerState, 
+    DependencyMakerState, 
+    ResourceMakerState,
+    ResourceAssignerState, 
+    OutputState,
+)
+from .subgraph._project_maker_nodes import (
+    create_project_context, 
+    create_project_dialogue, 
+    create_project_dialogue_tools, 
+    create_project_commit,
+)
+from .subgraph._req_maker_nodes import (
+    create_req_context, 
+    create_req_context_tools, 
+    create_req_dialogue, 
+    create_req_dialogue_tools, 
+    create_req_commit,
+)
+from .subgraph._task_maker_nodes import (
+    create_task_context, 
+    create_task_context_tools, 
+    create_task_dialogue, 
+    create_task_dialogue_tools, 
+    create_task_commit,
+)
+from .subgraph._dep_maker_nodes import (
+    create_dep_context, 
+    create_dep_context_tools, 
+    create_dep_dialogue, 
+    create_dep_dialogue_tools, 
+    create_dep_commit,
+)
+from .subgraph._resource_maker_nodes import (
+    create_resource_context, 
+    create_resource_dialogue, 
+    create_resource_dialogue_tools, 
+    create_resource_commit
+)
+from .subgraph._resource_assigner_nodes import (
+    create_resource_assignment_context, 
+    create_resource_assignment_context_tools,
+    create_resource_assignment_dialogue,
+    create_resource_assignment_dialogue_tools,
+    create_resource_assignment_commit,
+)
 from ..utils._connection import execute, select
 
 model = ChatOllama(model="llama3.1:8b")
-
-@tool
-def add_resource(first_name: str, contact: str, last_name: str = "NULL"):
-    """Adds a new resource. A resource is a named person who contributes to a task."""
-    if last_name != "NULL":
-        last_name = "'" + last_name + "'"
-
-    execute(f"INSERT INTO public.resources(first_name, last_name, contact) VALUES('{first_name}', {last_name}, '{contact}')")
 
 @tool
 def assign_resource(task_name: str, resource_first_name: str, resource_last_name: str = ""):
@@ -75,9 +113,6 @@ class DirectionalOutput(BaseModel):
 queue_builder = model.with_structured_output(WorkflowOutput)
 directional_manager = model.with_structured_output(DirectionalOutput)
 
-resource_manager_tools = [add_resource, assign_resource]
-resource_manager = model.bind_tools(resource_manager_tools)
-
 # Threshold for "unvaluable" response from agents (characters)
 value_thresh = 30
 tool_to_direction = {
@@ -85,8 +120,8 @@ tool_to_direction = {
         "add_requirement": "req_maker",
         "add_task": "task_maker",
         "add_task_dependency": "dep_maker",
-        "add_resource": "resource_manager_check",
-        "assign_resource": "resource_manager_check",
+        "add_resource": "resource_maker",
+        "assign_resource": "resource_assigner",
 }
 
 def assign_workflow(state: OverallState, config: RunnableConfig) -> Command[Literal["supervisor", "clarification"]]:
@@ -128,13 +163,13 @@ def assign_workflow(state: OverallState, config: RunnableConfig) -> Command[Lite
         }, goto="clarification" if len(response["followup"]) > value_thresh else "supervisor",
     )
 
-def direct_workflow(state: OverallState) -> Command[Literal["project_maker", "req_maker", "task_maker", "dep_maker", "resource_manager_check", "scoper", "analyst", "suggestion_commit"]]:
+def direct_workflow(state: OverallState) -> Command[Literal["project_maker", "req_maker", "task_maker", "dep_maker", "resource_maker", "resource_assigner", "scoper", "analyst", "suggestion_commit"]]:
     return Command(
         update={"tool_queue": state["tool_queue"][1:]},
         goto=state["tool_queue"][0] if state["tool_queue"] else "suggestion_commit",
     )
 
-def clarify_input(state: OverallState) -> Command[Literal["liaison", "resource_manager_check", "suggestion_commit"]]:
+def clarify_input(state: OverallState) -> Command[Literal["liaison", "suggestion_commit"]]:
     new_request = interrupt(state["followup"])
 
     return Command(
@@ -142,9 +177,7 @@ def clarify_input(state: OverallState) -> Command[Literal["liaison", "resource_m
         goto=state["prev"],
     )
 
-def clarify_subgraph_input(
-        state: ProjectMakerState | ReqMakerState | TaskMakerState | DependencyMakerState
-    ) -> Command[Literal["context", "dialogue"]]:
+def clarify_subgraph_input(state: SubgraphState) -> Command[Literal["context", "dialogue"]]:
     new_request = interrupt(state["followup"])
 
     return Command(
@@ -157,7 +190,7 @@ project_maker_workflow = StateGraph(ProjectMakerState, output=OutputState)
 project_maker_workflow.add_node("clarification", clarify_subgraph_input)
 project_maker_workflow.add_node("context", create_project_context)
 project_maker_workflow.add_node("dialogue", create_project_dialogue)
-project_maker_workflow.add_node("dialogue_tools", create_project_tools())
+project_maker_workflow.add_node("dialogue_tools", create_project_dialogue_tools())
 project_maker_workflow.add_node("commit", create_project_commit)
 
 project_maker_workflow.set_entry_point("context")
@@ -271,63 +304,66 @@ def create_dep(state: OverallState) -> OverallState:
         "prev": "adding a new task dependency",
     }
 
-def manage_resources_check(state: OverallState, config: RunnableConfig) -> Command[Literal["resource_manager", "clarification"]]:
-    system_prompt = SystemMessage(
-        """
-        You are helping to manage the resources assigned to specific tasks within a project.
-        Resources are defined as named persons (with a required first and optional last name) that contribute their work to said tasks.
-        You may be asked to either create a new resource or assign an existing resource to a task. 
-        If the user wants to perform both of these functions, or multiple of each, approach them one at a time.
-        Remember that you are only gathering information, not performing the actual tasks themselves. 
-        Thus, do not remark on when a task has been completed, only ask for confirmation whether your information is correct.
+resource_maker_workflow = StateGraph(ResourceMakerState, output=OutputState)
 
-        To create a new resource, determine whether the provided message history has sufficient information regarding the resource's first name, (optionally) its last name, and its contact information.
-        If you determine that there is not enough information regarding these factors, return a followup question that respectfully asks the user for more details.
-        Make sure to ask the user for the resource's contact information if it is not clearly stated. It should preferably be an email address.
-        Once you determine that there is sufficient information, return only an empty string and nothing else.
+resource_maker_workflow.add_node("clarification", clarify_subgraph_input)
+resource_maker_workflow.add_node("context", create_resource_context)
+resource_maker_workflow.add_node("dialogue", create_resource_dialogue)
+resource_maker_workflow.add_node("dialogue_tools", create_resource_dialogue_tools())
+resource_maker_workflow.add_node("commit", create_resource_commit)
 
-        To assign an existing resource to a task, determine whether the provided message history has sufficient information regarding the resource's first and (optionally) last name as well as the name of the task to which the resource must be assigned.
-        If you determine that there is not enough information regarding these factors, return a followup question that respectfully asks the user for more details.
-        Once you determine that there is sufficient information, return only an empty string and nothing else.
-        """
-    )
-    response = directional_manager.invoke([system_prompt] + state["messages"], config=config)
+resource_maker_workflow.set_entry_point("context")
+resource_maker_workflow.add_edge("context", "dialogue")
+resource_maker_workflow.add_edge("dialogue_tools", "dialogue")
+resource_maker_workflow.set_finish_point("commit")
 
-    return Command(
-        update={
-            "prev": "resource_manager_check",
-            "followup": response.followup,
-        }, goto="clarification" if len(response.followup) > value_thresh else "resource_manager",
-    )
+resource_maker = resource_maker_workflow.compile()
 
-def manage_resources(state: OverallState, config: RunnableConfig) -> Command[Literal["resource_manager_tools", "suggestion"]]:
-    system_prompt = SystemMessage(
-        """
-        You are helping to manage the resources assigned to specific tasks within a project.
-        Resources are defined as named persons (with a required first and optional last name) that contribute their work to said tasks.
-        You may be asked to either create a new resource or assign an existing resource to a task. 
-        If the user wants to perform both of these functions, or multiple of each, approach them one at a time.
+def create_resource(state: OverallState) -> OverallState:
+    response = resource_maker.invoke({
+        "messages": state["messages"],
+        "first_name": "",
+        "last_name": "",
+        "contact": "",
+        "finish": False,
+    })
 
-        To create a new resource, you need its first name, (optionally) last name, and contact (which should preferably be an email address).
-        These values absolutely must be quoted directly from the user's messages.
+    return {
+        "messages": AIMessage(response["output"]),
+        "prev": "adding a new resource",
+    }
 
-        To assign an existing resource to a task, you need the resource's first name and, if present, last name as well as the name of the task to assign to.
-        All of these values absolutely must be quoted directly from the user's messages.
+resource_assigner_workflow = StateGraph(ResourceAssignerState, output=OutputState)
 
-        Call the appropriate tools based on the information present in the user's most recent messages.
-        If, based on these messages, you determine you must both create and assign a resource, ensure that you create the resource first.
-        You must not add any details that the user does not explicitly mention, such as names.
-        """
-    )
-    response = resource_manager.invoke([system_prompt] + state["messages"], config=config)
+resource_assigner_workflow.add_node("clarification", clarify_subgraph_input)
+resource_assigner_workflow.add_node("context", create_resource_assignment_context)
+resource_assigner_workflow.add_node("context_tools", create_resource_assignment_context_tools())
+resource_assigner_workflow.add_node("dialogue", create_resource_assignment_dialogue)
+resource_assigner_workflow.add_node("dialogue_tools", create_resource_assignment_dialogue_tools())
+resource_assigner_workflow.add_node("commit", create_resource_assignment_commit)
 
-    return Command(
-        update={"messages": [response]},
-        goto="resource_manager_tools" if response.tool_calls else "suggestion",
-    )
+resource_assigner_workflow.set_entry_point("context")
+resource_assigner_workflow.add_edge("context_tools", "context")
+resource_assigner_workflow.add_edge("dialogue_tools", "dialogue")
+resource_assigner_workflow.set_finish_point("commit")
 
-def manage_resources_tools():
-    return ToolNode(resource_manager_tools)
+resource_assigner = resource_assigner_workflow.compile()
+
+def assign_resource(state: OverallState) -> OverallState:
+    response = resource_assigner.invoke({
+        "messages": state["messages"],
+        "matching_resources": [],
+        "task_name": "",
+        "re_first_name": "",
+        "re_last_name": "",
+        "re_contact": "",
+        "finish": False,
+    })
+
+    return {
+        "messages": AIMessage(response["output"]),
+        "prev": "assigning a resource",
+    }
 
 def manage_scope(state: OverallState) -> OutputState:
     return {"output": "Ran manage_scope"}
@@ -374,6 +410,8 @@ def suggest_commit(state: OverallState, config: RunnableConfig) -> OverallState:
         Examine the provided messages and context to determine which project functions the user would like to use and how many of each.
         Based on the user's response to the AI-prompted question, return the appropriate number of calls for each function at your disposal.
         Remember that it is possible that the user may not wish to use any tools at all.
+
+        If the user's response is negative, assume that they do not wish to add any tools.
         """
     )
     response = queue_builder.invoke([system_prompt] + state["messages"][-2:], config=config).model_dump()
