@@ -5,8 +5,10 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
-from ..states import ResourceMakerState, OutputState
-from ...utils._connection import execute, select
+from langgraph.graph import StateGraph
+from interface.core.schemas import ResourceMakerState, OutputState
+from interface.utils._db_utils import execute, select
+from interface.utils._agent_utils import clarify_subgraph_input
 
 model = ChatOllama(model="llama3.1:8b")
 
@@ -22,23 +24,23 @@ def add_resource(
     contact: str,
 ):
     """Loads provided first name, last name, and contact into a new resource to be created."""
-    validated_first_name = first_name if first_name else current_first_name
-    validated_last_name =  last_name if last_name else current_last_name
-    validated_contact = contact if contact else current_contact
+    vfirst_name = first_name if first_name else current_first_name
+    vlast_name =  last_name if last_name else current_last_name
+    vcontact = contact if contact else current_contact
 
-    if validated_contact in existing_contacts:
-        raise ValueError(f"Resource with contact {validated_contact} already exists. Please enter a valid contact.")
+    if vcontact in existing_contacts:
+        raise ValueError(f"Resource with contact {vcontact} already exists. Please enter a valid contact.")
     
     return Command(update={
         "messages": [ToolMessage(
             f"""
-            Updated first name to: {validated_first_name}
-            Updated last name to: {validated_last_name}
-            Updated contact to: {validated_contact}
+            Updated first name to: {vfirst_name}
+            Updated last name to: {vlast_name}
+            Updated contact to: {vcontact}
             """, tool_call_id=tool_call_id)],
-        "first_name": validated_first_name,
-        "last_name": validated_last_name,
-        "contact": validated_contact,
+        "first_name": vfirst_name,
+        "last_name": vlast_name,
+        "contact": vcontact,
     })
 
 @tool
@@ -92,10 +94,22 @@ def create_resource_dialogue(state: ResourceMakerState, config: RunnableConfig) 
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_resource_dialogue_tools():
-    return ToolNode(resource_maker_tools)
-
 def create_resource_commit(state: ResourceMakerState) -> OutputState:
     execute("INSERT INTO public.resources(first_name, last_name, contact) VALUES(!p1, !p2, !p3)", state["first_name"], state["last_name"], state["contact"])
 
     return {"output": f"New resource added with\nName: {state["first_name"]} {state["last_name"]}\nContact: {state["contact"]}"}
+
+resource_maker_workflow = StateGraph(ResourceMakerState, output=OutputState)
+
+resource_maker_workflow.add_node("clarification", clarify_subgraph_input)
+resource_maker_workflow.add_node("context", create_resource_context)
+resource_maker_workflow.add_node("dialogue", create_resource_dialogue)
+resource_maker_workflow.add_node("dialogue_tools", ToolNode(resource_maker_tools))
+resource_maker_workflow.add_node("commit", create_resource_commit)
+
+resource_maker_workflow.set_entry_point("context")
+resource_maker_workflow.add_edge("context", "dialogue")
+resource_maker_workflow.add_edge("dialogue_tools", "dialogue")
+resource_maker_workflow.set_finish_point("commit")
+
+resource_maker_agent = resource_maker_workflow.compile()

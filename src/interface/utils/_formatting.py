@@ -1,17 +1,21 @@
 import re
 
-def sanitize(arg: int | str) -> str:
+def sanitize(arg: int | str | list[int | str]) -> str:
     """
     Sanitizes argument for use in Postgres SQL queries.
     - Converts falsy values to NULL
     - Escapes forbidden sequences
     - Formats single quotes
+    - Converts list of args to comma separated string
     """
+    if isinstance(arg, list):
+        return ", ".join([sanitize(val) for val in arg])
+    
     if isinstance(arg, int):
         return str(arg)
+    
     if not arg:
         return "NULL"
-    
     return "'" + arg.replace("'", "''") + "'"
 
 def format_sql_query(query: str, *args) -> str:

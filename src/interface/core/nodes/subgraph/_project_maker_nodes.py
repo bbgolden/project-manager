@@ -5,8 +5,10 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
-from ..states import ProjectMakerState, OutputState
-from ...utils._connection import execute, select
+from langgraph.graph import StateGraph
+from interface.core.schemas import ProjectMakerState, OutputState
+from interface.utils._db_utils import execute, select
+from interface.utils._agent_utils import clarify_subgraph_input
 
 model = ChatOllama(model="llama3.1:8b")
 
@@ -20,16 +22,16 @@ def add_project(
     description: str = "",
 ):
     """Loads provided name and description information into a new project to be created."""
-    validated_name = name if name else current_name
-    validated_desc = description if description else current_description
+    vname = name if name else current_name
+    vdesc = description if description else current_description
 
-    if validated_name in existing_projects:
-        raise ValueError(f"Project with name {validated_name} already exists. Please enter a valid project name.")
+    if vname in existing_projects:
+        raise ValueError(f"Project with name {vname} already exists. Please enter a valid project name.")
 
     return Command(update={
-        "messages": [ToolMessage(f"Updated project name to: {validated_name}.\nUpdated project description to: {validated_desc}", tool_call_id=tool_call_id)],
-        "project_name": validated_name,
-        "project_desc": validated_desc,
+        "messages": [ToolMessage(f"Updated project name to: {vname}.\nUpdated project description to: {vdesc}", tool_call_id=tool_call_id)],
+        "project_name": vname,
+        "project_desc": vdesc,
     })
 
 @tool
@@ -83,10 +85,22 @@ def create_project_dialogue(state: ProjectMakerState, config: RunnableConfig) ->
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_project_dialogue_tools():
-    return ToolNode(project_maker_tools)
-
 def create_project_commit(state: ProjectMakerState) -> OutputState:
     execute(f"INSERT INTO public.projects(name, description) VALUES(!p1, !p2)", state["project_name"], state["project_desc"])
 
     return {"output": f"New project added with\nName: {state["project_name"]}\nDescription: {state["project_desc"]}"}
+
+project_maker_workflow = StateGraph(ProjectMakerState, output=OutputState)
+
+project_maker_workflow.add_node("clarification", clarify_subgraph_input)
+project_maker_workflow.add_node("context", create_project_context)
+project_maker_workflow.add_node("dialogue", create_project_dialogue)
+project_maker_workflow.add_node("dialogue_tools", ToolNode(project_maker_tools))
+project_maker_workflow.add_node("commit", create_project_commit)
+
+project_maker_workflow.set_entry_point("context")
+project_maker_workflow.add_edge("context", "dialogue")
+project_maker_workflow.add_edge("dialogue_tools", "dialogue")
+project_maker_workflow.set_finish_point("commit")
+
+project_maker_agent = project_maker_workflow.compile()

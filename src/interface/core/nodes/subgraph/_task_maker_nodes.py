@@ -6,8 +6,10 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
-from ..states import TaskMakerState, OutputState
-from ...utils._connection import execute, select
+from langgraph.graph import StateGraph
+from interface.core.schemas import TaskMakerState, OutputState
+from interface.utils._db_utils import execute, select
+from interface.utils._agent_utils import clarify_subgraph_input
 
 model = ChatOllama(model="llama3.1:8b")
 
@@ -43,26 +45,26 @@ def add_task(
     task_description: str = "",
 ):
     """Loads provided information into a new task to be created."""
-    validated_task_name = task_name if task_name else current_name
-    validated_task_desc = task_description if task_description else current_desc
-    validated_start = start_date if start_date else current_start
-    validated_end = end_date if end_date else current_end
+    vtask_name = task_name if task_name else current_name
+    vtask_desc = task_description if task_description else current_desc
+    vstart = start_date if start_date else current_start
+    vend = end_date if end_date else current_end
 
-    if validated_task_name in existing_tasks:
-        raise ValueError(f"Task with name {validated_task_name} already exists. Please enter a valid task name.")
+    if vtask_name in existing_tasks:
+        raise ValueError(f"Task with name {vtask_name} already exists. Please enter a valid task name.")
 
     return Command(update={
         "messages": [ToolMessage(
             f"""
-            Updated name to: {validated_task_name}
-            Updated description to: {validated_task_desc}
-            Updated start date to: {validated_start}
-            Updated end date to: {validated_end}
+            Updated name to: {vtask_name}
+            Updated description to: {vtask_desc}
+            Updated start date to: {vstart}
+            Updated end date to: {vend}
             """, tool_call_id=tool_call_id)],
-        "task_name": validated_task_name,
-        "task_desc": validated_task_desc,
-        "start_date": validated_start,
-        "end_date": validated_end,
+        "task_name": vtask_name,
+        "task_desc": vtask_desc,
+        "start_date": vstart,
+        "end_date": vend,
     })
 
 @tool
@@ -109,9 +111,6 @@ def create_task_context(state: TaskMakerState, config: RunnableConfig) -> Comman
         }, goto="context_tools" if response.tool_calls else "clarification",
     )
 
-def create_task_context_tools():
-    return ToolNode(context_builder_tools)
-
 def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "commit"]]:
     if state["finish"]:
         return Command(goto="commit")
@@ -149,9 +148,6 @@ def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Comma
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_task_dialogue_tools():
-    return ToolNode(task_maker_tools)
-
 def create_task_commit(state: TaskMakerState) -> OutputState:
     project_id = select("SELECT project_id FROM public.projects WHERE name = !p1", state["project_name"])[0][0]
 
@@ -168,3 +164,19 @@ def create_task_commit(state: TaskMakerState) -> OutputState:
             End Date: {state["end_date"]}
             """
     }
+
+task_maker_workflow = StateGraph(TaskMakerState, output=OutputState)
+
+task_maker_workflow.add_node("clarification", clarify_subgraph_input)
+task_maker_workflow.add_node("context", create_task_context)
+task_maker_workflow.add_node("context_tools", ToolNode(context_builder_tools))
+task_maker_workflow.add_node("dialogue", create_task_dialogue)
+task_maker_workflow.add_node("dialogue_tools", ToolNode(task_maker_tools))
+task_maker_workflow.add_node("commit", create_task_commit)
+
+task_maker_workflow.set_entry_point("context")
+task_maker_workflow.add_edge("context_tools", "context")
+task_maker_workflow.add_edge("dialogue_tools", "dialogue")
+task_maker_workflow.set_finish_point("commit")
+
+task_maker_agent = task_maker_workflow.compile()

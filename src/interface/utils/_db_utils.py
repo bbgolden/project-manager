@@ -1,7 +1,7 @@
 import os
 import psycopg2
 from dotenv import load_dotenv
-from._formatting import format_sql_query
+from interface.utils._formatting import format_sql_query
 
 load_dotenv()
 
@@ -45,7 +45,7 @@ def execute(query: str, *args):
         conn.commit()
         conn.close()
 
-def select(query: str, *args) -> list[tuple[int | str]]:
+def select(query: str, *args) -> list[tuple[int | str, ...]]:
     """
     Given query is formatted with sanitized arguments.
 

@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from langgraph.types import Command
 from langgraph.checkpoint.memory import MemorySaver
-from core.graph import InputState, OutputState, OverallState
-from core.graph import (
+from interface.core.schemas import InputState, OutputState, OverallState
+from interface.core.nodes.graph.parent_nodes import (
     assign_workflow,
     direct_workflow, 
     clarify_input, 
@@ -13,8 +13,7 @@ from core.graph import (
     create_task,
     create_dep,
     create_resource,
-    assign_resource, 
-    manage_scope, 
+    assign_resource,
     analyze_project,
     suggest_next,
     suggest_commit,
@@ -34,10 +33,9 @@ workflow.add_node("task_maker", create_task)
 workflow.add_node("dep_maker", create_dep)
 workflow.add_node("resource_maker", create_resource)
 workflow.add_node("resource_assigner", assign_resource)
+workflow.add_node("analyst", analyze_project)
 workflow.add_node("suggestion", suggest_next)
 workflow.add_node("suggestion_commit", suggest_commit)
-workflow.add_node("scoper", manage_scope)
-workflow.add_node("analyst", analyze_project)
 
 workflow.set_entry_point("liaison")
 workflow.add_edge("project_maker", "suggestion")
@@ -46,8 +44,7 @@ workflow.add_edge("task_maker", "suggestion")
 workflow.add_edge("dep_maker", "suggestion")
 workflow.add_edge("resource_maker", "suggestion")
 workflow.add_edge("resource_assigner", "suggestion")
-workflow.set_finish_point("scoper")
-workflow.set_finish_point("analyst")
+workflow.add_edge("analyst", "suggestion")
 workflow.add_conditional_edges(
     "suggestion_commit",
     should_finish,

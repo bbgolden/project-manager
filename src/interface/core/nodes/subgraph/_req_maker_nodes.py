@@ -5,8 +5,10 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
-from ..states import ReqMakerState, OutputState
-from ...utils._connection import execute, select
+from langgraph.graph import StateGraph
+from interface.core.schemas import ReqMakerState, OutputState
+from interface.utils._db_utils import execute, select
+from interface.utils._agent_utils import clarify_subgraph_input
 
 model = ChatOllama(model="llama3.1:8b")
 
@@ -35,13 +37,13 @@ def add_requirement(
     description: str,
 ):
     """Loads provided information into a new requirement to be created."""
-    validated_project_name = project_name if project_name else current_project_name
-    validated_description = description if description else current_description
+    vproject_name = project_name if project_name else current_project_name
+    vdescription = description if description else current_description
 
     return Command(update={
-        "messages": [ToolMessage(f"Updated parent project to: {validated_project_name}.\nUpdated description to: {validated_description}", tool_call_id=tool_call_id)],
-        "project_name": validated_project_name,
-        "req_desc": validated_description,
+        "messages": [ToolMessage(f"Updated parent project to: {vproject_name}.\nUpdated description to: {vdescription}", tool_call_id=tool_call_id)],
+        "project_name": vproject_name,
+        "req_desc": vdescription,
     })
 
 @tool
@@ -88,9 +90,6 @@ def create_req_context(state: ReqMakerState, config: RunnableConfig) -> Command[
         }, goto="context_tools" if response.tool_calls else "clarification",   
     )
 
-def create_req_context_tools():
-    return ToolNode(context_builder_tools)
-
 def create_req_dialogue(state: ReqMakerState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "commit"]]:
     if state["finish"]:
         return Command(goto="commit")
@@ -124,12 +123,25 @@ def create_req_dialogue(state: ReqMakerState, config: RunnableConfig) -> Command
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_req_dialogue_tools():
-    return ToolNode(req_maker_tools)
-
 def create_req_commit(state: ReqMakerState) -> OutputState:
     project_id = select("SELECT project_id FROM public.projects WHERE name = !p1", state["project_name"])[0][0]
 
     execute("INSERT INTO public.requirements(project_id, description) VALUES(!p1, !p2)", project_id, state["req_desc"])
 
     return {"output": f"New requirement added with\nName: {state["project_name"]}\nDescription: {state["req_desc"]}"}
+
+req_maker_workflow = StateGraph(ReqMakerState, output=OutputState)
+
+req_maker_workflow.add_node("clarification", clarify_subgraph_input)
+req_maker_workflow.add_node("context", create_req_context)
+req_maker_workflow.add_node("context_tools", ToolNode(context_builder_tools))
+req_maker_workflow.add_node("dialogue", create_req_dialogue)
+req_maker_workflow.add_node("dialogue_tools", ToolNode(req_maker_tools))
+req_maker_workflow.add_node("commit", create_req_commit)
+
+req_maker_workflow.set_entry_point("context")
+req_maker_workflow.add_edge("context_tools", "context")
+req_maker_workflow.add_edge("dialogue_tools", "dialogue")
+req_maker_workflow.set_finish_point("commit")
+
+req_maker_agent = req_maker_workflow.compile()
