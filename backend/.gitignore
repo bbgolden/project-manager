@@ -8,6 +8,3 @@ wheels/
 
 # Virtual environments
 .venv
-
-# Manually-added files
-.env
