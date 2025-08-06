@@ -17,7 +17,7 @@ class AgentMessage(BaseModel):
     content: str
 
 ORIGINS = (
-    "http://localhost:5173",
+    "http://localhost:3000",
 )
 
 app.add_middleware(
@@ -28,7 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/c", response_model=AgentMessage)
+@app.post("/chat", response_model=AgentMessage)
 def send_chat(message: UserMessage):
     config = {"configurable": {"thread_id": message.thread_id}}
 
@@ -43,4 +43,4 @@ def send_chat(message: UserMessage):
         return AgentMessage(content=response["output"])
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)

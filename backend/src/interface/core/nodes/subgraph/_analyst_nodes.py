@@ -1,16 +1,14 @@
 from typing import Literal, Annotated
-from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
 from langgraph.graph import StateGraph
+from interface.config import model
 from interface.core.schemas import AnalystState, OutputState
 from interface.utils._db_utils import select
 from interface.utils._agent_utils import clarify_subgraph_input, get_invalid_values
-
-model = ChatOllama(model="llama3.1:8b")
 
 VARCHAR_ARR_EMPTY_ARG = ["__none__"]
 DATE_ARR_EMPTY_ARG = ["0001-01-01"]

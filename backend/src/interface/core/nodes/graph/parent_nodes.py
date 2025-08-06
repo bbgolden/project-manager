@@ -1,9 +1,9 @@
 from typing import Literal
-from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command, interrupt
-from interface.core.schemas import RouterSchema, DialogueSchema, OverallState, OutputState
+from interface.config import model
+from interface.core.schemas import RouterSchema, DialogueSchema, OverallState
 from interface.core.nodes.subgraph._project_maker_nodes import project_maker_agent
 from interface.core.nodes.subgraph._req_maker_nodes import req_maker_agent
 from interface.core.nodes.subgraph._task_maker_nodes import task_maker_agent
@@ -11,8 +11,6 @@ from interface.core.nodes.subgraph._dep_maker_nodes import dep_maker_agent
 from interface.core.nodes.subgraph._resource_maker_nodes import resource_maker_agent
 from interface.core.nodes.subgraph._resource_assigner_nodes import resource_assigner_agent
 from interface.core.nodes.subgraph._analyst_nodes import analyst_agent
-
-model = ChatOllama(model="llama3.1:8b")
 
 queue_builder = model.with_structured_output(RouterSchema)
 directional_manager = model.with_structured_output(DialogueSchema)

@@ -1,17 +1,15 @@
 from collections import namedtuple
 from typing import Literal, Annotated
-from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
 from langgraph.graph import StateGraph
+from interface.config import model
 from interface.core.schemas import ResourceAssignerState, OutputState
 from interface.utils._db_utils import execute, select
 from interface.utils._agent_utils import clarify_subgraph_input
-
-model = ChatOllama(model="llama3.1:8b")
 
 @tool
 def get_resource_assignment_context(
