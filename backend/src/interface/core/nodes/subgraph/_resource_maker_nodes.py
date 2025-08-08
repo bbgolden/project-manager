@@ -6,9 +6,9 @@ from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
 from langgraph.graph import StateGraph
 from interface.config import model
-from interface.core.schemas import ResourceMakerState, OutputState
+from interface.core.schemas import ResourceMakerState, SubgraphOutputState
 from interface.utils._db_utils import execute, select
-from interface.utils._agent_utils import clarify_subgraph_input
+from interface.utils._agent_utils import clarify_subgraph_input, compile_action_data
 
 @tool
 def add_resource(
@@ -92,12 +92,12 @@ def create_resource_dialogue(state: ResourceMakerState, config: RunnableConfig) 
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_resource_commit(state: ResourceMakerState) -> OutputState:
+def create_resource_commit(state: ResourceMakerState) -> SubgraphOutputState:
     execute("INSERT INTO public.resources(first_name, last_name, contact) VALUES(!p1, !p2, !p3)", state["first_name"], state["last_name"], state["contact"])
 
-    return {"output": f"New resource added with\nName: {state["first_name"]} {state["last_name"]}\nContact: {state["contact"]}"}
+    return {"action": compile_action_data("resource_maker", state)}
 
-resource_maker_workflow = StateGraph(ResourceMakerState, output=OutputState)
+resource_maker_workflow = StateGraph(ResourceMakerState, output=SubgraphOutputState)
 
 resource_maker_workflow.add_node("clarification", clarify_subgraph_input)
 resource_maker_workflow.add_node("context", create_resource_context)

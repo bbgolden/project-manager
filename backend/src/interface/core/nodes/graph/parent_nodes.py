@@ -3,14 +3,17 @@ from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command, interrupt
 from interface.config import model
+from interface.core.templates import (
+    PROJECT_MAKER_OUTPUT, 
+    REQ_MAKER_OUTPUT,
+    TASK_MAKER_OUTPUT,
+    DEP_MAKER_OUTPUT,
+    RES_MAKER_OUTPUT,
+    RES_ASSIGN_OUTPUT,
+    ANALYST_OUTPUT,
+)
 from interface.core.schemas import RouterSchema, DialogueSchema, OverallState
-from interface.core.nodes.subgraph._project_maker_nodes import project_maker_agent
-from interface.core.nodes.subgraph._req_maker_nodes import req_maker_agent
-from interface.core.nodes.subgraph._task_maker_nodes import task_maker_agent
-from interface.core.nodes.subgraph._dep_maker_nodes import dep_maker_agent
-from interface.core.nodes.subgraph._resource_maker_nodes import resource_maker_agent
-from interface.core.nodes.subgraph._resource_assigner_nodes import resource_assigner_agent
-from interface.core.nodes.subgraph._analyst_nodes import analyst_agent
+from interface.core.nodes.subgraph import *
 
 queue_builder = model.with_structured_output(RouterSchema)
 directional_manager = model.with_structured_output(DialogueSchema)
@@ -88,10 +91,15 @@ def create_project(state: OverallState) -> OverallState:
         "project_desc": "",
         "finish": False,
     })
+    
+    action = response["action"]
 
     return {
-        "messages": [AIMessage(response["output"])],
+        "messages": [AIMessage(
+            PROJECT_MAKER_OUTPUT.format_map(action.params)
+        )],
         "prev": "adding a new project",
+        "actions_taken": [action],
     }
 
 def create_req(state: OverallState) -> OverallState:
@@ -101,10 +109,15 @@ def create_req(state: OverallState) -> OverallState:
         "req_desc": "",
         "finish": False,
     })
+    
+    action = response["action"]
 
     return {
-        "messages": AIMessage(response["output"]),
+        "messages": [AIMessage(
+            REQ_MAKER_OUTPUT.format_map(action.params)
+        )],
         "prev": "adding a new requirement",
+        "actions_taken": [action],
     }
 
 def create_task(state: OverallState) -> OverallState:
@@ -118,9 +131,14 @@ def create_task(state: OverallState) -> OverallState:
         "finish": False,
     })
 
+    action = response["action"]
+
     return {
-        "messages": AIMessage(response["output"]),
+        "messages": [AIMessage(
+            TASK_MAKER_OUTPUT.format_map(action.params)
+        )],
         "prev": "adding a new task",
+        "actions_taken": [action]
     }
 
 def create_dep(state: OverallState) -> OverallState:
@@ -132,9 +150,14 @@ def create_dep(state: OverallState) -> OverallState:
         "finish": False,
     })
 
+    action = response["action"]
+
     return {
-        "messages": AIMessage(response["output"]),
+        "messages": [AIMessage(
+            DEP_MAKER_OUTPUT.format_map(action.params)
+        )],
         "prev": "adding a new task dependency",
+        "actions_taken": [action]
     }
 
 def create_resource(state: OverallState) -> OverallState:
@@ -146,9 +169,14 @@ def create_resource(state: OverallState) -> OverallState:
         "finish": False,
     })
 
+    action = response["action"]
+
     return {
-        "messages": AIMessage(response["output"]),
+        "messages": [AIMessage(
+            RES_MAKER_OUTPUT.format_map(action.params)
+        )],
         "prev": "adding a new resource",
+        "actions_taken": [action],
     }
 
 def assign_resource(state: OverallState) -> OverallState:
@@ -162,9 +190,14 @@ def assign_resource(state: OverallState) -> OverallState:
         "finish": False,
     })
 
+    action = response["action"]
+
     return {
-        "messages": AIMessage(response["output"]),
+        "messages": [AIMessage(
+            RES_ASSIGN_OUTPUT.format_map(action.params)
+        )],
         "prev": "assigning a resource",
+        "actions_taken": [action],
     }
 
 def analyze_project(state: OverallState) -> OverallState:
@@ -174,9 +207,14 @@ def analyze_project(state: OverallState) -> OverallState:
         "finish": False,
     })
 
+    action = response["action"]
+
     return {
-        "messages": AIMessage(response["output"]),
+        "messages": [AIMessage(
+            ANALYST_OUTPUT.format_map(action.params)
+        )],
         "prev": "asking questions about/analyzing the project",
+        "actions_taken": [action],
     }
 
 def suggest_next(state: OverallState, config: RunnableConfig) -> Command[Literal["clarification", "supervisor"]]:

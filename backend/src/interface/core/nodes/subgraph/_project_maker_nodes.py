@@ -6,9 +6,9 @@ from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
 from langgraph.graph import StateGraph
 from interface.config import model
-from interface.core.schemas import ProjectMakerState, OutputState
+from interface.core.schemas import ProjectMakerState, SubgraphOutputState
 from interface.utils._db_utils import execute, select
-from interface.utils._agent_utils import clarify_subgraph_input
+from interface.utils._agent_utils import clarify_subgraph_input, compile_action_data
 
 @tool
 def add_project(
@@ -83,12 +83,12 @@ def create_project_dialogue(state: ProjectMakerState, config: RunnableConfig) ->
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_project_commit(state: ProjectMakerState) -> OutputState:
+def create_project_commit(state: ProjectMakerState) -> SubgraphOutputState:
     execute(f"INSERT INTO public.projects(name, description) VALUES(!p1, !p2)", state["project_name"], state["project_desc"])
 
-    return {"output": f"New project added with\nName: {state["project_name"]}\nDescription: {state["project_desc"]}"}
+    return {"action": compile_action_data("project_maker", state)}
 
-project_maker_workflow = StateGraph(ProjectMakerState, output=OutputState)
+project_maker_workflow = StateGraph(ProjectMakerState, output=SubgraphOutputState)
 
 project_maker_workflow.add_node("clarification", clarify_subgraph_input)
 project_maker_workflow.add_node("context", create_project_context)

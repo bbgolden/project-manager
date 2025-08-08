@@ -10,11 +10,13 @@ export default function ChatWindow({
     thread: string,
 }) {
     const [messages, setMessages] = useState([] as string[]);
+    const userMessageStyle = "text-gray-100 text-md text-shadow-blue-200 text-right";
+    const agentMessageStyle = "text-red-100 text-md text-shadow-red-200 text-left";
 
     const loadMessage = (data: FormData) => {
         const message = data.get("message")!.toString()
 
-        setMessages(prevMessages => [...prevMessages, message]);
+        setMessages(prevMessages => [...prevMessages, message, "Thinking..."]);
         requestAnimationFrame(() => {
             setTimeout(() => {
                 void submitMessage(message);
@@ -24,22 +26,25 @@ export default function ChatWindow({
 
     const submitMessage = async (message: string) => {
         const response = await sendMessage(message.toString(), thread, messages.length == 0);
-        setMessages(prevMessages => [...prevMessages, response]);
+        setMessages(prevMessages => {
+            const messagesExcludeLast = prevMessages.filter(msg => msg != "Thinking...")
+            return [...messagesExcludeLast, response]
+        });
     };
 
     return (
-        <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-            <ul>
-                {messages.map((message, index) => (
-                    <li className={index % 2 == 0 ? "stroke-violet-300" : "via-red-300"} key={index}>
-                        {message}
-                    </li>
-                ))}
-            </ul>
+        <div className="font-sans flex flex-col bg-gray-950 rounded-4xl p-4">
+            {messages.map((message, index) => (
+                <div className="bg-gray-900 rounded-lg m-2 p-2.5 justify-center" key={index}>
+                    <p className={index % 2 == 0 ? userMessageStyle : agentMessageStyle}>
+                            {message}
+                    </p>
+                </div>
+            ))}
 
-            <Form action={loadMessage}>
-                <input name="message" className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" />
-                <button type="submit">Send Message</button>
+            <Form action={loadMessage} className="flex mt-auto bg-gray-50 border border-gray-300 text-gray-900 text-sm self-center rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 w-11/12">
+                <input name="message" className="flex-grow" />
+                <button type="submit">Send</button>
             </Form>
         </div>
     );

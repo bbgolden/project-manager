@@ -1,7 +1,7 @@
 from typing import Literal
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command, interrupt
-from interface.core.schemas import SubgraphState
+from interface.core.schemas import SubgraphState, Action, ParamStr
 
 def get_invalid_values[T](vals_to_check: list[T], existing_vals: list[T]) -> list[T]:
     """Returns all values in vals_to_check that are not present in existing_vals."""
@@ -17,3 +17,13 @@ def clarify_subgraph_input(state: SubgraphState) -> Command[Literal["context", "
         update={"messages": [HumanMessage(new_request)]},
         goto=state["redirect"],
     )
+
+def compile_action_data(name: str, state: SubgraphState) -> Action:
+    params = {}
+
+    for field, value in state.items():
+        print(type(value))
+        if type(value) is ParamStr:
+            params.update({field, value})
+
+    return Action(name=name, params=params)

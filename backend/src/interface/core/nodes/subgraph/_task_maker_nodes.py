@@ -7,9 +7,9 @@ from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
 from langgraph.graph import StateGraph
 from interface.config import model
-from interface.core.schemas import TaskMakerState, OutputState
+from interface.core.schemas import TaskMakerState, SubgraphOutputState
 from interface.utils._db_utils import execute, select
-from interface.utils._agent_utils import clarify_subgraph_input
+from interface.utils._agent_utils import clarify_subgraph_input, compile_action_data
 
 @tool
 def get_task_context(tool_call_id: Annotated[str, InjectedToolCallId], project_name: str):
@@ -146,24 +146,14 @@ def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Comma
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_task_commit(state: TaskMakerState) -> OutputState:
+def create_task_commit(state: TaskMakerState) -> SubgraphOutputState:
     project_id = select("SELECT project_id FROM public.projects WHERE name = !p1", state["project_name"])[0][0]
 
     execute("INSERT INTO public.tasks(project_id, name, description, start, \"end\") VALUES(!p1, !p2, !p3, !p4, !p5)", project_id, state["task_name"], state["task_desc"], state["start_date"], state["end_date"])
 
-    return {
-        "output": 
-            f"""
-            New task added with
-            Parent Project: {state["project_name"]}
-            Name: {state["task_name"]}
-            Description: {state["task_desc"]}
-            Start Date: {state["start_date"]}
-            End Date: {state["end_date"]}
-            """
-    }
+    return {"action": compile_action_data("task_maker", state)}
 
-task_maker_workflow = StateGraph(TaskMakerState, output=OutputState)
+task_maker_workflow = StateGraph(TaskMakerState, output=SubgraphOutputState)
 
 task_maker_workflow.add_node("clarification", clarify_subgraph_input)
 task_maker_workflow.add_node("context", create_task_context)

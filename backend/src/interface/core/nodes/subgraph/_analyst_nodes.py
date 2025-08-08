@@ -6,9 +6,9 @@ from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
 from langgraph.graph import StateGraph
 from interface.config import model
-from interface.core.schemas import AnalystState, OutputState
+from interface.core.schemas import AnalystState, SubgraphOutputState
 from interface.utils._db_utils import select
-from interface.utils._agent_utils import clarify_subgraph_input, get_invalid_values
+from interface.utils._agent_utils import clarify_subgraph_input, get_invalid_values, compile_action_data
 
 VARCHAR_ARR_EMPTY_ARG = ["__none__"]
 DATE_ARR_EMPTY_ARG = ["0001-01-01"]
@@ -258,7 +258,7 @@ def analysis_context(state: AnalystState, config: RunnableConfig) -> Command[Lit
 def analysis_dialogue(state: AnalystState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "__end__"]]:
     if state["finish"]:
         return Command(
-            update={"output": "Finished analysis"},
+            update={"action": compile_action_data("analyst", state)},
             goto="__end__",
         )
     
@@ -288,7 +288,7 @@ def analysis_dialogue(state: AnalystState, config: RunnableConfig) -> Command[Li
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-analyst_workflow = StateGraph(AnalystState, output=OutputState)
+analyst_workflow = StateGraph(AnalystState, output=SubgraphOutputState)
 
 analyst_workflow.add_node("clarification", clarify_subgraph_input)
 analyst_workflow.add_node("context", analysis_context)

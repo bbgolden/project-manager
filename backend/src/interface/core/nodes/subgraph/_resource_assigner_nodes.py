@@ -7,9 +7,9 @@ from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
 from langgraph.graph import StateGraph
 from interface.config import model
-from interface.core.schemas import ResourceAssignerState, OutputState
+from interface.core.schemas import ResourceAssignerState, SubgraphOutputState
 from interface.utils._db_utils import execute, select
-from interface.utils._agent_utils import clarify_subgraph_input
+from interface.utils._agent_utils import clarify_subgraph_input, compile_action_data
 
 @tool
 def get_resource_assignment_context(
@@ -149,15 +149,15 @@ def create_resource_assignment_dialogue(state: ResourceAssignerState, config: Ru
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_resource_assignment_commit(state: ResourceAssignerState) -> OutputState:
+def create_resource_assignment_commit(state: ResourceAssignerState) -> SubgraphOutputState:
     task_id = select("SELECT task_id FROM public.tasks WHERE name = !p1", state["task_name"])[0][0]
     resource_id = select("SELECT resource_id FROM public.resources WHERE contact = !p1", state["re_contact"])[0][0]
 
     execute("INSERT INTO public.resource_assignments(task_id, resource_id) VALUES(!p1, !p2)", task_id, resource_id)
 
-    return {"output": f"Assigned resource with contact {state["re_contact"]} to task with name {state["task_name"]}"}
+    return {"action": compile_action_data("resource_assigner", state)}
 
-resource_assigner_workflow = StateGraph(ResourceAssignerState, output=OutputState)
+resource_assigner_workflow = StateGraph(ResourceAssignerState, output=SubgraphOutputState)
 
 resource_assigner_workflow.add_node("clarification", clarify_subgraph_input)
 resource_assigner_workflow.add_node("context", create_resource_assignment_context)

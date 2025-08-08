@@ -1,6 +1,6 @@
 import uuid
 from langgraph.types import Command
-from interface.project_manager import project_manager
+from interface.core.project_manager import project_manager
 
 if __name__ == "__main__":
     config = {"configurable": {"thread_id": uuid.uuid4()}}
@@ -17,3 +17,4 @@ if __name__ == "__main__":
             break
 
     print(result["output"])
+    print(result["actions_taken"])

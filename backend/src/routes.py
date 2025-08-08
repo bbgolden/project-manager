@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.types import Command
-from interface.project_manager import project_manager
+from interface.core.project_manager import project_manager
 
 app = FastAPI(debug=True)
 

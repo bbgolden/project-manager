@@ -6,9 +6,9 @@ from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
 from langgraph.graph import StateGraph
 from interface.config import model
-from interface.core.schemas import ReqMakerState, OutputState
+from interface.core.schemas import ReqMakerState, SubgraphOutputState
 from interface.utils._db_utils import execute, select
-from interface.utils._agent_utils import clarify_subgraph_input
+from interface.utils._agent_utils import clarify_subgraph_input, compile_action_data
 
 @tool
 def get_requirement_context(tool_call_id: Annotated[str, InjectedToolCallId], project_name: str):
@@ -121,14 +121,14 @@ def create_req_dialogue(state: ReqMakerState, config: RunnableConfig) -> Command
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_req_commit(state: ReqMakerState) -> OutputState:
+def create_req_commit(state: ReqMakerState) -> SubgraphOutputState:
     project_id = select("SELECT project_id FROM public.projects WHERE name = !p1", state["project_name"])[0][0]
 
     execute("INSERT INTO public.requirements(project_id, description) VALUES(!p1, !p2)", project_id, state["req_desc"])
 
-    return {"output": f"New requirement added with\nName: {state["project_name"]}\nDescription: {state["req_desc"]}"}
+    return {"action": compile_action_data("requirement_maker", state)}
 
-req_maker_workflow = StateGraph(ReqMakerState, output=OutputState)
+req_maker_workflow = StateGraph(ReqMakerState, output=SubgraphOutputState)
 
 req_maker_workflow.add_node("clarification", clarify_subgraph_input)
 req_maker_workflow.add_node("context", create_req_context)

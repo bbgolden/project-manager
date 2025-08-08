@@ -6,9 +6,9 @@ from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.types import Command
 from langgraph.graph import StateGraph
 from interface.config import model
-from interface.core.schemas import DependencyMakerState, OutputState
+from interface.core.schemas import DependencyMakerState, SubgraphOutputState
 from interface.utils._db_utils import execute, select
-from interface.utils._agent_utils import clarify_subgraph_input, get_invalid_values
+from interface.utils._agent_utils import clarify_subgraph_input, get_invalid_values, compile_action_data
 
 @tool
 def get_dependency_context(
@@ -161,15 +161,15 @@ def create_dep_dialogue(state: DependencyMakerState, config: RunnableConfig) -> 
         }, goto="dialogue_tools" if response.tool_calls else "clarification",
     )
 
-def create_dep_commit(state: DependencyMakerState) -> OutputState:
+def create_dep_commit(state: DependencyMakerState) -> SubgraphOutputState:
     task1_id = select("SELECT task_id FROM public.tasks WHERE name = !p1", state["task1_name"])[0][0]
     task2_id = select("SELECT task_id FROM public.tasks WHERE name = !p1", state["task2_name"])[0][0]
 
     execute("INSERT INTO public.task_dependencies(task_id, dependent_id, description) VALUES(!p1, !p2, !p3)", task1_id, task2_id, state["dep_desc"])
 
-    return {"output": f"New task dependency added with\nTask {state["task2_name"]} dependent on task {state["task1_name"]}\nDescription: {state["dep_desc"]}"}
+    return {"action": compile_action_data("dependency_maker", state)}
 
-dep_maker_workflow = StateGraph(DependencyMakerState, output=OutputState)
+dep_maker_workflow = StateGraph(DependencyMakerState, output=SubgraphOutputState)
 
 dep_maker_workflow.add_node("clarification", clarify_subgraph_input)
 dep_maker_workflow.add_node("context", create_dep_context)

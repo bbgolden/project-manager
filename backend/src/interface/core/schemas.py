@@ -1,7 +1,10 @@
-from typing import Annotated, Sequence, TypedDict
+from typing import Annotated, Sequence, TypedDict, Any
+from operator import add
 from pydantic import BaseModel, Field
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
+
+# Model output schemas
 
 class RouterSchema(BaseModel):
     add_project: int = Field(
@@ -40,11 +43,26 @@ class RouterSchema(BaseModel):
 class DialogueSchema(BaseModel):
     followup: str = Field(description="A followup question for the user to answer and give further clarification, if necessary.")
 
+# Unique wrappers
+
+class Action(BaseModel):
+    name: str
+    params: dict[str, Any]
+
+class ParamStr(str):
+    ...
+
+# Graph states
+
 class InputState(TypedDict):
     user_input: str
 
 class OutputState(TypedDict):
     output: str
+    actions_taken: Annotated[Sequence[Action], add]
+
+class SubgraphOutputState(TypedDict):
+    action: Action
 
 class OverallState(InputState, OutputState):
     messages: Annotated[Sequence[AnyMessage], add_messages]
@@ -52,58 +70,60 @@ class OverallState(InputState, OutputState):
     prev: str
     followup: str
 
-class SubgraphState(OutputState):
+class SubgraphState(SubgraphOutputState):
     messages: Annotated[Sequence[AnyMessage], add_messages]
     redirect: str
     followup: str
     finish: bool
 
+# Subgraph-specific graph states
+
 class ProjectMakerState(SubgraphState):
     existing_projects: list[str]
-    project_name: str
-    project_desc: str
+    project_name: ParamStr
+    project_desc: ParamStr
 
 class ReqMakerState(SubgraphState):
     existing_projects: list[str]
-    project_name: str
+    project_name: Annotated[str, "__action_param__"]
     project_desc: str
-    req_desc: str
+    req_desc: Annotated[str, "__action_param__"]
 
 class TaskMakerState(SubgraphState):
     existing_projects: list[str]
     existing_tasks: list[str]
-    project_name: str
+    project_name: Annotated[str, "__action_param__"]
     project_desc: str
-    task_name: str
-    task_desc: str
-    start_date: str
-    end_date: str
+    task_name: Annotated[str, "__action_param__"]
+    task_desc: Annotated[str, "__action_param__"]
+    start_date: Annotated[str, "__action_param__"]
+    end_date: Annotated[str, "__action_param__"]
 
 class DependencyMakerState(SubgraphState):
     existing_tasks: list[str]
-    task1_name: str
+    task1_name: Annotated[str, "__action_param__"]
     task1_desc: str
-    task2_name: str
+    task2_name: Annotated[str, "__action_param__"]
     task2_desc: str
-    dep_desc: str
+    dep_desc: Annotated[str, "__action_param__"]
 
 class ResourceMakerState(SubgraphState):
     existing_contacts: list[str]
-    contact: str
-    first_name: str
-    last_name: str
+    contact: Annotated[str, "__action_param__"]
+    first_name: Annotated[str, "__action_param__"]
+    last_name: Annotated[str, "__action_param__"]
 
 class ResourceAssignerState(SubgraphState):
     existing_tasks: list[str]
     matching_resources: list[tuple[str]]
-    task_name: str
-    re_first_name: str
-    re_last_name: str
-    re_contact: str
+    task_name: Annotated[str, "__action_param__"]
+    re_first_name: Annotated[str, "__action_param__"]
+    re_last_name: Annotated[str, "__action_param__"]
+    re_contact: Annotated[str, "__action_param__"]
 
 class AnalystState(SubgraphState):
     existing_tasks: list[str]
     existing_resources: list[tuple[str]]
     project_id: int
-    project_name: str
+    project_name: Annotated[str, "__action_param__"]
     project_desc: str
