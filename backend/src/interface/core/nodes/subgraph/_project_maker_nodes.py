@@ -49,7 +49,7 @@ def create_project_context(state: ProjectMakerState) -> ProjectMakerState:
     return {"existing_projects": existing_projects}
 
 def create_project_dialogue(state: ProjectMakerState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "commit"]]:
-    if state["finish"]:
+    if state.finish:
         return Command(goto="commit")
     
     system_prompt = SystemMessage(
@@ -73,7 +73,7 @@ def create_project_dialogue(state: ProjectMakerState, config: RunnableConfig) ->
         You are not permitted to tell the user that the project has been added. You may only provide the information you have and ask for confirmation that it is correct.
         """
     )
-    response = project_maker.invoke([system_prompt] + state["messages"], config=config)
+    response = project_maker.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -84,7 +84,7 @@ def create_project_dialogue(state: ProjectMakerState, config: RunnableConfig) ->
     )
 
 def create_project_commit(state: ProjectMakerState) -> SubgraphOutputState:
-    execute(f"INSERT INTO public.projects(name, description) VALUES(!p1, !p2)", state["project_name"], state["project_desc"])
+    execute(f"INSERT INTO public.projects(name, description) VALUES(!p1, !p2)", state.project_name, state.project_desc)
 
     return {"action": compile_action_data("project_maker", state)}
 

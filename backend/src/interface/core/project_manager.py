@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from interface.core.schemas import InputState, OutputState, OverallState
@@ -17,8 +16,6 @@ from interface.core.nodes.graph.parent_nodes import (
     suggest_commit,
     should_finish,
 )
-
-load_dotenv()
 
 workflow = StateGraph(OverallState, input=InputState, output=OutputState)
 

@@ -31,7 +31,7 @@ tool_to_direction = {
 }
 
 def assign_workflow(state: OverallState, config: RunnableConfig) -> Command[Literal["supervisor", "clarification"]]:
-    new_messages = [HumanMessage(state["user_input"])]
+    new_messages = [HumanMessage(state.user_input)]
 
     system_prompt = SystemMessage(
         """
@@ -52,7 +52,7 @@ def assign_workflow(state: OverallState, config: RunnableConfig) -> Command[Lite
         If and only if you cannot understand the user's request, return a followup question (in the form of a comprehensible sentence) that respectfully asks the user to give a different request.
         """
     )
-    response = queue_builder.invoke([system_prompt] + state["messages"] + new_messages, config=config).model_dump()
+    response = queue_builder.invoke([system_prompt] + state.messages + new_messages, config=config).model_dump()
 
     if len(response["followup"]) > value_thresh:
         new_messages.append(AIMessage(response["followup"]))
@@ -72,25 +72,20 @@ def assign_workflow(state: OverallState, config: RunnableConfig) -> Command[Lite
 
 def direct_workflow(state: OverallState) -> Command[Literal["project_maker", "req_maker", "task_maker", "dep_maker", "resource_maker", "resource_assigner", "analyst", "suggestion_commit"]]:
     return Command(
-        update={"tool_queue": state["tool_queue"][1:]},
-        goto=state["tool_queue"][0] if state["tool_queue"] else "suggestion_commit",
+        update={"tool_queue": state.tool_queue[1:]},
+        goto=state.tool_queue[0] if state.tool_queue else "suggestion_commit",
     )
 
 def clarify_input(state: OverallState) -> Command[Literal["liaison", "suggestion_commit"]]:
-    new_request = interrupt(state["followup"])
+    new_request = interrupt(state.followup)
 
     return Command(
-        update={"user_input": new_request} if state["prev"] == "liaison" else {"messages": [AIMessage(state["followup"]), HumanMessage(new_request)]},
-        goto=state["prev"],
+        update={"user_input": new_request} if state.prev == "liaison" else {"messages": [AIMessage(state.followup), HumanMessage(new_request)]},
+        goto=state.prev,
     )
 
 def create_project(state: OverallState) -> OverallState:
-    response = project_maker_agent.invoke({
-        "messages": state["messages"],
-        "project_name": "",
-        "project_desc": "",
-        "finish": False,
-    })
+    response = project_maker_agent.invoke({"messages": state.messages})
     
     action = response["action"]
 
@@ -103,12 +98,7 @@ def create_project(state: OverallState) -> OverallState:
     }
 
 def create_req(state: OverallState) -> OverallState:
-    response = req_maker_agent.invoke({
-        "messages": state["messages"],
-        "project_name": "",
-        "req_desc": "",
-        "finish": False,
-    })
+    response = req_maker_agent.invoke({"messages": state.messages})
     
     action = response["action"]
 
@@ -121,15 +111,7 @@ def create_req(state: OverallState) -> OverallState:
     }
 
 def create_task(state: OverallState) -> OverallState:
-    response = task_maker_agent.invoke({
-        "messages": state["messages"],
-        "project_name": "",
-        "task_name": "",
-        "task_desc": "",
-        "start_date": "",
-        "end_date": "",
-        "finish": False,
-    })
+    response = task_maker_agent.invoke({"messages": state.messages})
 
     action = response["action"]
 
@@ -142,13 +124,7 @@ def create_task(state: OverallState) -> OverallState:
     }
 
 def create_dep(state: OverallState) -> OverallState:
-    response = dep_maker_agent.invoke({
-        "messages": state["messages"],
-        "task1_name": "",
-        "task2_name": "",
-        "dep_desc": "",
-        "finish": False,
-    })
+    response = dep_maker_agent.invoke({"messages": state.messages})
 
     action = response["action"]
 
@@ -161,13 +137,7 @@ def create_dep(state: OverallState) -> OverallState:
     }
 
 def create_resource(state: OverallState) -> OverallState:
-    response = resource_maker_agent.invoke({
-        "messages": state["messages"],
-        "first_name": "",
-        "last_name": "",
-        "contact": "",
-        "finish": False,
-    })
+    response = resource_maker_agent.invoke({"messages": state.messages})
 
     action = response["action"]
 
@@ -180,15 +150,7 @@ def create_resource(state: OverallState) -> OverallState:
     }
 
 def assign_resource(state: OverallState) -> OverallState:
-    response = resource_assigner_agent.invoke({
-        "messages": state["messages"],
-        "matching_resources": [],
-        "task_name": "",
-        "re_first_name": "",
-        "re_last_name": "",
-        "re_contact": "",
-        "finish": False,
-    })
+    response = resource_assigner_agent.invoke({"messages": state.messages})
 
     action = response["action"]
 
@@ -201,11 +163,7 @@ def assign_resource(state: OverallState) -> OverallState:
     }
 
 def analyze_project(state: OverallState) -> OverallState:
-    response = analyst_agent.invoke({
-        "messages": state["messages"],
-        "project_name": "",
-        "finish": False,
-    })
+    response = analyst_agent.invoke({"messages": state.messages})
 
     action = response["action"]
 
@@ -232,14 +190,14 @@ def suggest_next(state: OverallState, config: RunnableConfig) -> Command[Literal
         Assigning a resource: recommended secondary functions are adding a new resource
         Asking questions about/analyzing the project: there are no recommended secondary functions
 
-        The user's most recently used function is {state["prev"]}
+        The user's most recently used function is {state.prev}
         Take into consideration this information, recent message context, and the above list.
         Also consider any questions asked in the AI message after the latest tool call.
         Return a followup question using these factors that respectfully asks the user whether they would like to utilize an appropriate secondary function.
         Ensure that the question is formatted as a proper sentence.
         """
     )
-    response = directional_manager.invoke([system_prompt] + state["messages"], config=config)
+    response = directional_manager.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -261,18 +219,18 @@ def suggest_commit(state: OverallState, config: RunnableConfig) -> OverallState:
         If the user's response is negative, assume that they do not wish to add any tools.
         """
     )
-    response = queue_builder.invoke([system_prompt] + state["messages"][-2:], config=config).model_dump()
+    response = queue_builder.invoke([system_prompt] + state.messages[-2:], config=config).model_dump()
 
     new_tools = list[str]()
     for tool, direction in tool_to_direction.items():
         new_tools.extend([direction] * response[tool])
 
     return {
-        "tool_queue": new_tools + state["tool_queue"], 
+        "tool_queue": new_tools + state.tool_queue, 
         "output": "New tools added: " + (", ".join(new_tools) if new_tools else "None"),
     }
 
 def should_finish(state: OverallState) -> Literal["loop", "end"]:
-    if state["tool_queue"]:
+    if state.tool_queue:
         return "loop"
     return "end"

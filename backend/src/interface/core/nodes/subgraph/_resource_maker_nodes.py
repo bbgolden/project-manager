@@ -58,7 +58,7 @@ def create_resource_context(state: ResourceMakerState) -> ResourceMakerState:
     return {"existing_contacts": existing_contacts}
 
 def create_resource_dialogue(state: ResourceMakerState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "commit"]]:
-    if state["finish"]:
+    if state.finish:
         return Command(goto="commit")
     
     system_prompt = SystemMessage(
@@ -82,7 +82,7 @@ def create_resource_dialogue(state: ResourceMakerState, config: RunnableConfig) 
         You are not permitted to tell the user that the resource has been added. You may only provide the information you have and ask for confirmation that it is correct.
         """
     )
-    response = resource_maker.invoke([system_prompt] + state["messages"], config=config)
+    response = resource_maker.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -93,7 +93,7 @@ def create_resource_dialogue(state: ResourceMakerState, config: RunnableConfig) 
     )
 
 def create_resource_commit(state: ResourceMakerState) -> SubgraphOutputState:
-    execute("INSERT INTO public.resources(first_name, last_name, contact) VALUES(!p1, !p2, !p3)", state["first_name"], state["last_name"], state["contact"])
+    execute("INSERT INTO public.resources(first_name, last_name, contact) VALUES(!p1, !p2, !p3)", state.first_name, state.last_name, state.contact)
 
     return {"action": compile_action_data("resource_maker", state)}
 

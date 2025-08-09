@@ -93,7 +93,7 @@ dep_maker_tools = [add_task_dependency, finish_execution]
 dep_maker = model.bind_tools(dep_maker_tools)
 
 def create_dep_context(state: DependencyMakerState, config: RunnableConfig) -> Command[Literal["clarification", "context_tools", "dialogue"]]:
-    if state["task1_name"] and state["task2_name"] and all(task in state["existing_tasks"] for task in [state["task1_name"], state["task2_name"]]):
+    if state.task1_name and state.task2_name and all(task in state.existing_tasks for task in [state.task1_name, state.task2_name]):
         return Command(goto="dialogue")
     
     system_prompt = SystemMessage(
@@ -114,7 +114,7 @@ def create_dep_context(state: DependencyMakerState, config: RunnableConfig) -> C
         Do not send any message to the user at this point.
         """
     )
-    response = context_builder.invoke([system_prompt] + state["messages"], config=config)
+    response = context_builder.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -125,7 +125,7 @@ def create_dep_context(state: DependencyMakerState, config: RunnableConfig) -> C
     )
 
 def create_dep_dialogue(state: DependencyMakerState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "commit"]]:
-    if state["finish"]:
+    if state.finish:
         return Command(goto="commit")
     
     system_prompt = SystemMessage(
@@ -135,10 +135,10 @@ def create_dep_dialogue(state: DependencyMakerState, config: RunnableConfig) -> 
         Task 2 is defined as dependent on Task 1 if Task 1 must be finished before Task 2 can be completed.
         A dependency has a description (optional).
         The task dependency you are currently creating involves two tasks.
-        One has the name {state["task1_name"]}.
-        This task has the following description (note that this is not the dependency description): {state["task1_desc"]}
-        The other has the name {state["task2_name"]}.
-        This task has the following description (note that this is not the dependency description): {state["task2_desc"]}
+        One has the name {state.task1_name}.
+        This task has the following description (note that this is not the dependency description): {state.task1_desc}
+        The other has the name {state.task2_name}.
+        This task has the following description (note that this is not the dependency description): {state.task2_desc}
 
         Using your knowledge of the two tasks involved, help the user to add the task dependency.
         You must not add any details that the user does not explicitly mention, such as specific names.
@@ -151,7 +151,7 @@ def create_dep_dialogue(state: DependencyMakerState, config: RunnableConfig) -> 
         You are not permitted to tell the user that the dependency has been added. You may only provide the information you have and ask for confirmation that it is correct.
         """
     )
-    response = dep_maker.invoke([system_prompt] + state["messages"], config=config)
+    response = dep_maker.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -162,10 +162,10 @@ def create_dep_dialogue(state: DependencyMakerState, config: RunnableConfig) -> 
     )
 
 def create_dep_commit(state: DependencyMakerState) -> SubgraphOutputState:
-    task1_id = select("SELECT task_id FROM public.tasks WHERE name = !p1", state["task1_name"])[0][0]
-    task2_id = select("SELECT task_id FROM public.tasks WHERE name = !p1", state["task2_name"])[0][0]
+    task1_id = select("SELECT task_id FROM public.tasks WHERE name = !p1", state.task1_name)[0][0]
+    task2_id = select("SELECT task_id FROM public.tasks WHERE name = !p1", state.task2_name)[0][0]
 
-    execute("INSERT INTO public.task_dependencies(task_id, dependent_id, description) VALUES(!p1, !p2, !p3)", task1_id, task2_id, state["dep_desc"])
+    execute("INSERT INTO public.task_dependencies(task_id, dependent_id, description) VALUES(!p1, !p2, !p3)", task1_id, task2_id, state.dep_desc)
 
     return {"action": compile_action_data("dependency_maker", state)}
 

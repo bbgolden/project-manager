@@ -83,7 +83,7 @@ resource_assigner_tools = [assign_resource, finish_execution]
 resource_assigner = model.bind_tools(resource_assigner_tools)
 
 def create_resource_assignment_context(state: ResourceAssignerState, config: RunnableConfig) -> Command[Literal["clarification", "context_tools", "dialogue"]]:
-    if state["matching_resources"]:
+    if state.matching_resources:
         return Command(goto="dialogue")
     
     system_prompt = SystemMessage(
@@ -104,7 +104,7 @@ def create_resource_assignment_context(state: ResourceAssignerState, config: Run
         Do not send any message to the user at this point.
         """
     )
-    response = context_builder.invoke([system_prompt] + state["messages"], config=config)
+    response = context_builder.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -115,7 +115,7 @@ def create_resource_assignment_context(state: ResourceAssignerState, config: Run
     )
 
 def create_resource_assignment_dialogue(state: ResourceAssignerState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "commit"]]:
-    if state["finish"]:
+    if state.finish:
         return Command(goto="commit")
     
     Resource = namedtuple("Resource", ["first_name", "last_name", "contact"])
@@ -127,7 +127,7 @@ def create_resource_assignment_dialogue(state: ResourceAssignerState, config: Ru
         A resource is defined as an individual who contributes to a project by completing tasks within the project.
 
         The following list contains information on the resources that match the name of the resource that the user would like to assign:
-        {", ".join([str(Resource(*re)) for re in state["matching_resources"]])}
+        {", ".join([str(Resource(*re)) for re in state.matching_resources])}
         Provide this information to the user and ask them which resource is the correct one that they wish to assign.
         Then, help the user to assign this resource to the appropriate task.
 
@@ -139,7 +139,7 @@ def create_resource_assignment_dialogue(state: ResourceAssignerState, config: Ru
         You are not permitted to tell the user that the resource has been assigned. You may only provide the information you have and ask for confirmation that it is correct.
         """
     )
-    response = resource_assigner.invoke([system_prompt] + state["messages"], config=config)
+    response = resource_assigner.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -150,8 +150,8 @@ def create_resource_assignment_dialogue(state: ResourceAssignerState, config: Ru
     )
 
 def create_resource_assignment_commit(state: ResourceAssignerState) -> SubgraphOutputState:
-    task_id = select("SELECT task_id FROM public.tasks WHERE name = !p1", state["task_name"])[0][0]
-    resource_id = select("SELECT resource_id FROM public.resources WHERE contact = !p1", state["re_contact"])[0][0]
+    task_id = select("SELECT task_id FROM public.tasks WHERE name = !p1", state.task_name)[0][0]
+    resource_id = select("SELECT resource_id FROM public.resources WHERE contact = !p1", state.re_contact)[0][0]
 
     execute("INSERT INTO public.resource_assignments(task_id, resource_id) VALUES(!p1, !p2)", task_id, resource_id)
 

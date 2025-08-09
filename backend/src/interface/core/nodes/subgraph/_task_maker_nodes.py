@@ -80,7 +80,7 @@ task_maker_tools = [add_task, finish_execution]
 task_maker = model.bind_tools(task_maker_tools)
 
 def create_task_context(state: TaskMakerState, config: RunnableConfig) -> Command[Literal["clarification", "context_tools", "dialogue"]]:
-    if state["project_name"] and state["project_name"] in state["existing_projects"]:
+    if state.project_name and state.project_name in state.existing_projects:
         return Command(goto="dialogue")
     
     system_prompt = SystemMessage(
@@ -99,7 +99,7 @@ def create_task_context(state: TaskMakerState, config: RunnableConfig) -> Comman
         Do not send any message to the user at this point.
         """
     )
-    response = context_builder.invoke([system_prompt] + state["messages"], config=config)
+    response = context_builder.invoke([system_prompt] + state.messages, config=config)
     
     return Command(
         update={
@@ -110,7 +110,7 @@ def create_task_context(state: TaskMakerState, config: RunnableConfig) -> Comman
     )
 
 def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "commit"]]:
-    if state["finish"]:
+    if state.finish:
         return Command(goto="commit")
     
     system_prompt = SystemMessage(
@@ -119,8 +119,8 @@ def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Comma
         Speak in the second person, as if in conversation with the user.
         A task is an objective to be completed in a project.
         A task has a name (required), description (optional), start date (required), and end date(optional).
-        The task you are currently creating belongs to a parent project called {state["project_name"]}.
-        This project has the following description (note that this is not the task description): {state["project_desc"]}
+        The task you are currently creating belongs to a parent project called {state.project_name}.
+        This project has the following description (note that this is not the task description): {state.project_desc}
 
         Using your knowledge of the task's parent project, help the user to add the task.
         You must not add any details that the user does not explicitly mention, such as specific names.
@@ -136,7 +136,7 @@ def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Comma
         You are not permitted to tell the user that the task has been added. You may only provide the information you have and ask for confirmation that it is correct.
         """
     )
-    response = task_maker.invoke([system_prompt] + state["messages"], config=config)
+    response = task_maker.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -147,9 +147,9 @@ def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Comma
     )
 
 def create_task_commit(state: TaskMakerState) -> SubgraphOutputState:
-    project_id = select("SELECT project_id FROM public.projects WHERE name = !p1", state["project_name"])[0][0]
+    project_id = select("SELECT project_id FROM public.projects WHERE name = !p1", state.project_name)[0][0]
 
-    execute("INSERT INTO public.tasks(project_id, name, description, start, \"end\") VALUES(!p1, !p2, !p3, !p4, !p5)", project_id, state["task_name"], state["task_desc"], state["start_date"], state["end_date"])
+    execute("INSERT INTO public.tasks(project_id, name, description, start, \"end\") VALUES(!p1, !p2, !p3, !p4, !p5)", project_id, state.task_name, state.task_desc, state.start_date, state.end_date)
 
     return {"action": compile_action_data("task_maker", state)}
 

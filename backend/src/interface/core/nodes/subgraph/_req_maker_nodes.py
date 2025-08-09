@@ -59,7 +59,7 @@ req_maker_tools = [add_requirement, finish_execution]
 req_maker = model.bind_tools(req_maker_tools)
 
 def create_req_context(state: ReqMakerState, config: RunnableConfig) -> Command[Literal["clarification", "context_tools", "dialogue"]]:
-    if state["project_name"] and state["project_name"] in state["existing_projects"]:
+    if state.project_name and state.project_name in state.existing_projects:
         return Command(goto="dialogue")
 
     system_prompt = SystemMessage(
@@ -78,7 +78,7 @@ def create_req_context(state: ReqMakerState, config: RunnableConfig) -> Command[
         Do not send any message to the user at this point.
         """
     )
-    response = context_builder.invoke([system_prompt] + state["messages"], config=config)
+    response = context_builder.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -89,7 +89,7 @@ def create_req_context(state: ReqMakerState, config: RunnableConfig) -> Command[
     )
 
 def create_req_dialogue(state: ReqMakerState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "commit"]]:
-    if state["finish"]:
+    if state.finish:
         return Command(goto="commit")
     
     system_prompt = SystemMessage(
@@ -98,8 +98,8 @@ def create_req_dialogue(state: ReqMakerState, config: RunnableConfig) -> Command
         Speak in the second person, as if in conversation with the user.
         A requirement is defined as a condition or capability that must be fulfilled for a project to be considered successful.
         A requirement has a description (required).
-        The requirement you are currently creating belongs to a parent project called {state["project_name"]}.
-        This project has the following description (note that this is not the requirement description): {state["project_desc"]}
+        The requirement you are currently creating belongs to a parent project called {state.project_name}.
+        This project has the following description (note that this is not the requirement description): {state.project_desc}
 
         Using your knowledge of the requirement's parent project, help the user to add the requirement.
         You must not add any details that the user does not explicitly mention, such as specific names.
@@ -111,7 +111,7 @@ def create_req_dialogue(state: ReqMakerState, config: RunnableConfig) -> Command
         You are not permitted to tell the user that the requirement has been added. You may only provide the information you have and ask for confirmation that it is correct.
         """
     )
-    response = req_maker.invoke([system_prompt] + state["messages"], config=config)
+    response = req_maker.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -122,9 +122,9 @@ def create_req_dialogue(state: ReqMakerState, config: RunnableConfig) -> Command
     )
 
 def create_req_commit(state: ReqMakerState) -> SubgraphOutputState:
-    project_id = select("SELECT project_id FROM public.projects WHERE name = !p1", state["project_name"])[0][0]
+    project_id = select("SELECT project_id FROM public.projects WHERE name = !p1", state.project_name)[0][0]
 
-    execute("INSERT INTO public.requirements(project_id, description) VALUES(!p1, !p2)", project_id, state["req_desc"])
+    execute("INSERT INTO public.requirements(project_id, description) VALUES(!p1, !p2)", project_id, state.req_desc)
 
     return {"action": compile_action_data("requirement_maker", state)}
 

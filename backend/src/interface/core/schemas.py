@@ -1,4 +1,4 @@
-from typing import Annotated, Sequence, TypedDict, Any
+from typing import Annotated, Sequence, Any
 from operator import add
 from pydantic import BaseModel, Field
 from langchain_core.messages import AnyMessage
@@ -49,81 +49,78 @@ class Action(BaseModel):
     name: str
     params: dict[str, Any]
 
-class ParamStr(str):
-    ...
-
 # Graph states
 
-class InputState(TypedDict):
+class InputState(BaseModel):
     user_input: str
 
-class OutputState(TypedDict):
-    output: str
-    actions_taken: Annotated[Sequence[Action], add]
+class OutputState(BaseModel):
+    output: str | None = None
+    actions_taken: Annotated[Sequence[Action], add] = []
 
-class SubgraphOutputState(TypedDict):
-    action: Action
+class SubgraphOutputState(BaseModel):
+    action: Action | None = None
 
 class OverallState(InputState, OutputState):
     messages: Annotated[Sequence[AnyMessage], add_messages]
-    tool_queue: list[str]
-    prev: str
-    followup: str
+    tool_queue: list[str] = []
+    prev: str | None = None
+    followup: str | None = None
 
 class SubgraphState(SubgraphOutputState):
     messages: Annotated[Sequence[AnyMessage], add_messages]
-    redirect: str
-    followup: str
-    finish: bool
+    redirect: str | None = None
+    followup: str | None = None
+    finish: bool = False
 
 # Subgraph-specific graph states
 
 class ProjectMakerState(SubgraphState):
-    existing_projects: list[str]
-    project_name: ParamStr
-    project_desc: ParamStr
+    existing_projects: list[str] = []
+    project_name: Annotated[str, "__action_param__"] = ""
+    project_desc: Annotated[str, "__action_param__"] = ""
 
 class ReqMakerState(SubgraphState):
-    existing_projects: list[str]
-    project_name: Annotated[str, "__action_param__"]
-    project_desc: str
-    req_desc: Annotated[str, "__action_param__"]
+    existing_projects: list[str] = []
+    project_name: Annotated[str, "__action_param__"] = ""
+    project_desc: str = ""
+    req_desc: Annotated[str, "__action_param__"] = ""
 
 class TaskMakerState(SubgraphState):
-    existing_projects: list[str]
-    existing_tasks: list[str]
-    project_name: Annotated[str, "__action_param__"]
-    project_desc: str
-    task_name: Annotated[str, "__action_param__"]
-    task_desc: Annotated[str, "__action_param__"]
-    start_date: Annotated[str, "__action_param__"]
-    end_date: Annotated[str, "__action_param__"]
+    existing_projects: list[str] = []
+    existing_tasks: list[str] = []
+    project_name: Annotated[str, "__action_param__"] = ""
+    project_desc: str = ""
+    task_name: Annotated[str, "__action_param__"] = ""
+    task_desc: Annotated[str, "__action_param__"] = ""
+    start_date: Annotated[str, "__action_param__"] = ""
+    end_date: Annotated[str, "__action_param__"] = ""
 
 class DependencyMakerState(SubgraphState):
-    existing_tasks: list[str]
-    task1_name: Annotated[str, "__action_param__"]
-    task1_desc: str
-    task2_name: Annotated[str, "__action_param__"]
-    task2_desc: str
-    dep_desc: Annotated[str, "__action_param__"]
+    existing_tasks: list[str] = []
+    task1_name: Annotated[str, "__action_param__"] = ""
+    task1_desc: str = ""
+    task2_name: Annotated[str, "__action_param__"] = ""
+    task2_desc: str = ""
+    dep_desc: Annotated[str, "__action_param__"] = ""
 
 class ResourceMakerState(SubgraphState):
-    existing_contacts: list[str]
-    contact: Annotated[str, "__action_param__"]
-    first_name: Annotated[str, "__action_param__"]
-    last_name: Annotated[str, "__action_param__"]
+    existing_contacts: list[str] = []
+    contact: Annotated[str, "__action_param__"] = ""
+    first_name: Annotated[str, "__action_param__"] = ""
+    last_name: Annotated[str, "__action_param__"] = ""
 
 class ResourceAssignerState(SubgraphState):
-    existing_tasks: list[str]
-    matching_resources: list[tuple[str]]
-    task_name: Annotated[str, "__action_param__"]
-    re_first_name: Annotated[str, "__action_param__"]
-    re_last_name: Annotated[str, "__action_param__"]
-    re_contact: Annotated[str, "__action_param__"]
+    existing_tasks: list[str] = []
+    matching_resources: list[tuple[str]] = []
+    task_name: Annotated[str, "__action_param__"] = ""
+    re_first_name: Annotated[str, "__action_param__"] = ""
+    re_last_name: Annotated[str, "__action_param__"] = ""
+    re_contact: Annotated[str, "__action_param__"] = ""
 
 class AnalystState(SubgraphState):
-    existing_tasks: list[str]
-    existing_resources: list[tuple[str]]
-    project_id: int
-    project_name: Annotated[str, "__action_param__"]
-    project_desc: str
+    existing_tasks: list[str] = []
+    existing_resources: list[tuple[str, str | None, str]] = []
+    project_id: int = -1
+    project_name: Annotated[str, "__action_param__"] = ""
+    project_desc: str = ""

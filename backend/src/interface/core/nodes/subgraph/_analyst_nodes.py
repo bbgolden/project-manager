@@ -226,7 +226,7 @@ analyst_tools = [get_project_requirements, get_tasks, get_dependent_tasks, get_a
 analyst = model.bind_tools(analyst_tools)
 
 def analysis_context(state: AnalystState, config: RunnableConfig) -> Command[Literal["clarification", "context_tools", "dialogue"]]:
-    if state["project_name"]:
+    if state.project_name:
         return Command(goto="dialogue")
     
     system_prompt = SystemMessage(
@@ -245,7 +245,7 @@ def analysis_context(state: AnalystState, config: RunnableConfig) -> Command[Lit
         Do not send any message to the user at this point.
         """
     )
-    response = context_builder.invoke([system_prompt] + state["messages"], config=config)
+    response = context_builder.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
@@ -256,7 +256,7 @@ def analysis_context(state: AnalystState, config: RunnableConfig) -> Command[Lit
     )
 
 def analysis_dialogue(state: AnalystState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "__end__"]]:
-    if state["finish"]:
+    if state.finish:
         return Command(
             update={"action": compile_action_data("analyst", state)},
             goto="__end__",
@@ -278,7 +278,7 @@ def analysis_dialogue(state: AnalystState, config: RunnableConfig) -> Command[Li
         Do not ask any followup questions past this point.
         """
     )
-    response = analyst.invoke([system_prompt] + state["messages"], config=config)
+    response = analyst.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
         update={
