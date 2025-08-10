@@ -13,8 +13,8 @@ app = FastAPI(debug=True)
 
 class UserMessage(BaseModel):
     content: str
-    thread_id: UUID
-    is_first_message: bool
+    threadID: UUID
+    isFirstMessage: bool
 
 class AgentMessage(BaseModel):
     content: str
@@ -38,9 +38,9 @@ app.add_middleware(
 
 @app.post("/chat", response_model=AgentMessage)
 def send_chat(message: UserMessage):
-    config = {"configurable": {"thread_id": message.thread_id}}
+    config = {"configurable": {"thread_id": message.threadID}}
 
-    if message.is_first_message:
+    if message.isFirstMessage:
         response = project_manager.invoke({"user_input": message.content}, config=config)
     else:
         response = project_manager.invoke(Command(resume=message.content), config=config)
@@ -63,9 +63,9 @@ def get_status(thread: UUID):
     projects = [project for project, in select("SELECT name FROM public.projects")]
 
     timeline = [Task(
-        project_name=project_name,
-        task_name=task_name,
-        desc=desc,
+        projectName=project_name,
+        taskName=task_name,
+        taskDesc=desc,
         start=start.strftime("%Y-%m-%d"),
         end=end.strftime("%Y-%m-%d") if end else end,
     ) for project_name, task_name, desc, start, end in select(

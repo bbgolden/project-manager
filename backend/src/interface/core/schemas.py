@@ -50,9 +50,9 @@ class Action(BaseModel):
     params: dict[str, Any]
 
 class Task(BaseModel):
-    project_name: str
-    task_name: str
-    task_desc: str | None = None
+    projectName: str
+    taskName: str
+    taskDesc: str | None = None
     start: str
     end: str | None = None
 

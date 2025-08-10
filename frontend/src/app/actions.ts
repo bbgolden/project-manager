@@ -10,8 +10,8 @@ export async function sendMessage(
 ): Promise<string> {
     const response = await instance.post("/chat", {
         "content": message,
-        "thread_id": thread,
-        "is_first_message": isFirstMessage,
+        "threadID": thread,
+        "isFirstMessage": isFirstMessage,
     });
 
     revalidatePath("/");
