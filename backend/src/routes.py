@@ -18,9 +18,6 @@ class UserMessage(BaseModel):
 class AgentMessage(BaseModel):
     content: str
 
-class Thread(BaseModel):
-    thread_id: UUID
-
 class StatusInfo(BaseModel):
     actions: Sequence[Action]
 
@@ -50,9 +47,9 @@ def send_chat(message: UserMessage):
     except KeyError:
         return AgentMessage(content=response["output"])
     
-@app.get("/status", response_model=StatusInfo)
-def get_status(thread: Thread):
-    config = {"configurable": {"thread_id": thread.thread_id}}
+@app.get("/chat", response_model=StatusInfo)
+def get_status(thread: UUID):
+    config = {"configurable": {"thread_id": thread}}
     snapshot = project_manager.get_state(config=config)
 
     try:

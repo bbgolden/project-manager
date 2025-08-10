@@ -33,19 +33,22 @@ export default function ChatWindow({
     };
 
     return (
-        <div className="font-sans flex flex-col bg-gray-950 rounded-4xl p-4">
-            {messages.map((message, index) => (
-                <div className="bg-gray-900 rounded-lg m-2 p-2.5 justify-center" key={index}>
-                    <p className={index % 2 == 0 ? userMessageStyle : agentMessageStyle}>
+        <div className="h-full max-h-full">
+            <div className="font-sans flex flex-col bg-gray-950 rounded-t-4xl p-4 h-11/12 max-h-11/12 overflow-auto">
+                {messages.map((message, index) => (
+                    <div className="bg-gray-900 rounded-lg m-2 p-2.5 justify-center" key={index}>
+                        <p className={index % 2 == 0 ? userMessageStyle : agentMessageStyle}>
                             {message}
-                    </p>
-                </div>
-            ))}
-
-            <Form action={loadMessage} className="flex mt-auto bg-gray-50 border border-gray-300 text-gray-900 text-sm self-center rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 w-11/12">
-                <input name="message" className="flex-grow" />
-                <button type="submit">Send</button>
-            </Form>
+                        </p>
+                    </div>
+                ))}
+            </div>
+            <div className="font-sans flex flex-col justify-center items-center bg-gray-950 rounded-b-4xl p-4 h-1/12">
+                <Form action={loadMessage} className="flex bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 w-11/12">
+                    <input name="message" className="flex-grow" />
+                    <button type="submit" className="ml-2">Send</button>
+                </Form>
+            </div>
         </div>
     );
 }
