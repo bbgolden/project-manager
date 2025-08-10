@@ -5,8 +5,9 @@ from pydantic import BaseModel
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.types import Command
-from interface.core.schemas import Action
+from interface.core.schemas import Action, Task
 from interface.core.project_manager import project_manager
+from interface.utils import select
 
 app = FastAPI(debug=True)
 
@@ -19,7 +20,9 @@ class AgentMessage(BaseModel):
     content: str
 
 class StatusInfo(BaseModel):
+    projects: Sequence[str]
     actions: Sequence[Action]
+    timeline: Sequence[Task]
 
 ORIGINS = (
     "http://localhost:3000",
@@ -57,7 +60,25 @@ def get_status(thread: UUID):
     except KeyError:
         actions = []
 
-    return StatusInfo(actions=actions)
+    projects = [project for project, in select("SELECT name FROM public.projects")]
+
+    timeline = [Task(
+        project_name=project_name,
+        task_name=task_name,
+        desc=desc,
+        start=start.strftime("%Y-%m-%d"),
+        end=end.strftime("%Y-%m-%d") if end else end,
+    ) for project_name, task_name, desc, start, end in select(
+        """
+        SELECT projects.name, tasks.name, tasks.description, start, \"end\" 
+        FROM public.tasks
+        LEFT JOIN public.projects
+            ON projects.project_id = tasks.project_id 
+        ORDER BY \"end\"
+        """
+    )]
+
+    return StatusInfo(projects=projects, actions=actions, timeline=timeline)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

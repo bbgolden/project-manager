@@ -1,5 +1,6 @@
 import os
 import psycopg2
+from datetime import date
 from interface.utils._formatting import format_sql_query
 
 def get_cursor():
@@ -42,7 +43,7 @@ def execute(query: str, *args):
         conn.commit()
         conn.close()
 
-def select(query: str, *args) -> list[tuple[int | str, ...]]:
+def select(query: str, *args) -> list[tuple[int | str | date, ...]]:
     """
     Given query is formatted with sanitized arguments.
 

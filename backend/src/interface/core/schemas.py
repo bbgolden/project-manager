@@ -49,6 +49,13 @@ class Action(BaseModel):
     name: str
     params: dict[str, Any]
 
+class Task(BaseModel):
+    project_name: str
+    task_name: str
+    task_desc: str | None = None
+    start: str
+    end: str | None = None
+
 # Graph states
 
 class InputState(BaseModel):
