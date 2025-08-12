@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateTag } from "next/cache";
 import instance from "@/lib/api";
 
 export async function sendMessage(
@@ -14,6 +14,6 @@ export async function sendMessage(
         "isFirstMessage": isFirstMessage,
     });
 
-    revalidatePath("/");
+    revalidateTag("status");
     return response.data.content;
 }

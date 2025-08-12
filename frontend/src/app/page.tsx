@@ -1,13 +1,20 @@
 import { Suspense } from "react";
 import { cookies } from "next/headers";
+import { unstable_cacheTag as cacheTag} from "next/cache";
 import type { StatusData } from "@/types";
 import instance from "@/lib/api";
-import ChatWindow from "@/app/_components/chat";
-import StatusWindow from "@/app/_components/status";
+import ChatWindow from "@/app/_components/ChatWindow";
+import StatusWindow from "@/app/_components/StatusWindow";
+
+const getStatus = async (thread: string): Promise<StatusData> => {
+  "use cache";
+  cacheTag("status");
+  return instance.get("/chat?thread=" + thread).then(res => res.data);
+}
 
 export default async function Home() {
   const thread = (await cookies()).get("thread_id")?.value!;
-  const status: Promise<StatusData> = instance.get("/chat?thread=" + thread).then(res => res.data);
+  const status = getStatus(thread);
 
   return (
     <div className="font-sans grid grid-rows-[50px_1fr_50px] justify-items-center h-screen max-h-screen p-8 sm:p-20">
