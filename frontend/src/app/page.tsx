@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { unstable_cacheTag as cacheTag} from "next/cache";
+import { unstable_cacheTag as cacheTag } from "next/cache";
 import type { StatusData } from "@/types";
 import instance from "@/lib/api";
 import ChatWindow from "@/app/_components/ChatWindow";
@@ -17,13 +17,13 @@ export default async function Home() {
   const status = getStatus(thread);
 
   return (
-    <div className="font-sans grid grid-rows-[50px_1fr_50px] justify-items-center h-screen max-h-screen p-8 sm:p-20">
-      <main className="grid grid-rows-1 grid-cols-4 gap-[32px] row-start-2 items-center sm:items-start h-full max-h-full w-11/12">
-        <div className="row-span-full col-start-1 col-span-3 h-full max-h-full">
+    <div className="font-sans grid grid-rows-[50px_minmax(0,1fr)_50px] justify-items-center h-screen max-h-screen p-8 sm:p-20">
+      <main className="grid grid-rows-1 grid-cols-4 gap-[32px] row-start-2 items-center sm:items-start h-full max-h-full w-11/12 overflow-hidden">
+        <div className="row-span-full col-start-1 col-span-3 h-full max-h-full overflow-hidden">
           <ChatWindow thread={thread} />
         </div>
         <Suspense fallback={<div>Loading...</div>}>
-          <div className="row-span-full col-start-4 h-full">
+          <div className="row-span-full col-start-4 h-full max-h-full overflow-hidden">
             <StatusWindow status={status} />
           </div>
         </Suspense>

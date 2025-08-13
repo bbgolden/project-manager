@@ -39,8 +39,8 @@ def add_task(
     tool_call_id: Annotated[str, InjectedToolCallId],
     task_name: str,
     start_date: str = date.today().strftime("%Y-%m-%d"),
-    end_date: str = "",
-    task_description: str = "",
+    end_date: str | None = "",
+    task_description: str | None = "",
 ):
     """Loads provided information into a new task to be created."""
     vtask_name = task_name if task_name else current_name

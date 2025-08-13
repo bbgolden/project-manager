@@ -15,8 +15,8 @@ The user has created a new task with the following parameters:
 - Belongs to project with Project Name: {project_name}
 - Task Name: {task_name}
 - Task Desc: {task_desc}
-- Start Date: {start}
-- End Date {end}
+- Start Date: {start_date}
+- End Date {end_date}
 """
 
 DEP_MAKER_OUTPUT = """
@@ -29,17 +29,17 @@ The user has created a new task dependency with the following parameters:
 
 RES_MAKER_OUTPUT = """
 The user has created a new resource with the following parameters:
-- First Name: {first}
-- Last Name: {last}
+- First Name: {first_name}
+- Last Name: {last_name}
 - Contact: {contact} 
 """
 
 RES_ASSIGN_OUTPUT = """
 The user has assigned a resource to a task with the following parameters:
 - Task Name: {task_name}
-- Resource First Name: {first}
-- Resource Last Name: {last}
-- Resource Contact: {contact}
+- Resource First Name: {re_first_name}
+- Resource Last Name: {re_last_name}
+- Resource Contact: {re_contact}
 """
 
 ANALYST_OUTPUT = """

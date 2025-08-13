@@ -17,7 +17,7 @@ def add_project(
     current_description: Annotated[str, InjectedState("project_desc")], 
     tool_call_id: Annotated[str, InjectedToolCallId], 
     name: str, 
-    description: str = "",
+    description: str | None = "",
 ):
     """Loads provided name and description information into a new project to be created."""
     vname = name if name else current_name
