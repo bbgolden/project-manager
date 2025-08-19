@@ -33,7 +33,7 @@ export default function InfoDropdown({
             </button>
             <div
                 ref={contentRef}
-                className={`duration-400 ease-in-out ${isOpen ? `h-auto` : "h-0"}`}
+                className={`transition-[height] duration-400 ease-in-out`}
                 style={{ height: isOpen ? `${contentRef.current!.scrollHeight}px` : "0" }}
             >
                 <div className="px-4 py-2 bg-gray-700 rounded-b-md">

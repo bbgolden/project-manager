@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
-    const thread_id = request.cookies.get("thread_id");
+    const thread_id = request.cookies.get("threadID");
 
     if(thread_id) {
         return NextResponse.next();
     }
 
     const response = NextResponse.next();
-    response.cookies.set("thread_id", crypto.randomUUID());
+    response.cookies.set("threadID", crypto.randomUUID());
 
     return response;
 }

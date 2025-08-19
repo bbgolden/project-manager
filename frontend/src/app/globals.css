@@ -19,6 +19,20 @@
   }
 }
 
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

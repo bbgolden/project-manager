@@ -13,7 +13,7 @@ const getStatus = async (thread: string): Promise<StatusData> => {
 }
 
 export default async function Home() {
-  const thread = (await cookies()).get("thread_id")?.value!;
+  const thread = (await cookies()).get("threadID")?.value!;
   const status = getStatus(thread);
 
   return (

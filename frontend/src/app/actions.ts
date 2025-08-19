@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { cookies } from "next/headers";
 import instance from "@/lib/api";
 
 export async function sendMessage(
