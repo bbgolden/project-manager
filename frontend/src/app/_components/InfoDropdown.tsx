@@ -17,7 +17,7 @@ export default function InfoDropdown({
     return (
         <div className="border border-gray-800 rounded-md overflow-hidden">
             <button
-                className={`w-full text-left px-4 py-2 ${isOpen ? "bg-blue-800/10" : "bg-blue-950/10"} hover:bg-blue-800/10 rounded-t-md focus:outline-none`}
+                className={`w-full text-left px-4 py-2 ${isOpen ? "bg-blue-800/10" : "bg-blue-950/10"} hover:bg-blue-800/10 rounded-t-md focus:outline-none cursor-pointer`}
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <div className="flex w-full justify-between">

@@ -20,13 +20,13 @@ export default function StatusWindow({
         <div className="font-sans flex flex-col bg-gray-950 rounded-4xl gap-4 p-4 h-full items-start overflow-auto">
             <div className="flex w-full justify-center gap-[32px]">
                 <button 
-                    className={`transition-colors duration-400 ease-out ${currentDisplay == "actions" ? "bg-blue-900" : "bg-blue-950"} hover:bg-blue-900 p-2 rounded-xl`} 
+                    className={`transition-colors duration-400 ease-out ${currentDisplay == "actions" ? "bg-blue-900" : "bg-blue-950"} hover:bg-blue-900 p-2 rounded-xl cursor-pointer`} 
                     onClick={() => setCurrentDisplay("actions")}
                 >
                     AI Actions
                 </button>
                 <button 
-                    className={`transition-colors duration-400 ease-out ${currentDisplay == "timeline" ? "bg-blue-900" : "bg-blue-950"} hover:bg-blue-900 p-2 rounded-xl`} 
+                    className={`transition-colors duration-400 ease-out ${currentDisplay == "timeline" ? "bg-blue-900" : "bg-blue-950"} hover:bg-blue-900 p-2 rounded-xl cursor-pointer`} 
                     onClick={() => setCurrentDisplay("timeline")}
                 >
                     Timeline
