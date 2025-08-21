@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import Form from "next/form";
 import { sendMessage } from "@/app/actions";
+import SendIcon from "@/app/_components/ChatWindow/SendIcon";
 
 export default function ChatWindow({
     thread,
@@ -35,6 +36,7 @@ export default function ChatWindow({
 
     const getMarginTop = (): number => {
         const chatBoxHeight = chatBoxRef.current!.offsetHeight;
+        const chatBoxPadding = window.getComputedStyle(chatBoxRef.current!).paddingTop;
         const chatMessagesHeight = chatMessagesRef.current?.offsetHeight;
         const chatBarHeight = chatBarRef.current!.clientHeight;
 
@@ -42,7 +44,8 @@ export default function ChatWindow({
             return 0;
         }
 
-        return chatBoxHeight - (chatMessagesHeight ? chatMessagesHeight : 0) - chatBarHeight;
+        /* Default for chatMessagesHeight: 184px (height of two one-line messages and bottom padding) */
+        return chatBoxHeight - parseInt(chatBoxPadding.substring(0, chatBoxPadding.length - 2)) - (chatMessagesHeight || 184) - chatBarHeight;
     };
 
     return (
@@ -78,15 +81,17 @@ export default function ChatWindow({
                                 event.preventDefault();
                             }
                         }}
-                        className="flex relative -top-1/2 bg-gray-50  text-gray-900 text-md rounded-4xl p-2.5 dark:bg-gray-700 dark:text-white h-[50px] w-full"
+                        className="flex relative items-center -top-1/2 bg-gray-50  text-gray-900 text-md rounded-4xl p-2.5 dark:bg-gray-800 dark:text-white h-[50px] w-full"
                     >
                         <input 
                             name="chatMessage" 
                             placeholder="Ask about a project or create a new one"
-                            className="flex-grow placeholder-gray-400" 
+                            className="flex-grow placeholder-gray-400 cursor-text" 
                             autoComplete="off" 
                         />
-                        <button type="submit" className="ml-2">Send</button>
+                        <button type="submit" className="ml-2 cursor-pointer">
+                            <SendIcon className="w-8 h-8" stroke="#100f1a" />
+                        </button>
                     </Form>
                 </div>
             </div>

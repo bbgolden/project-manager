@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import { unstable_cacheTag as cacheTag } from "next/cache";
 import type { StatusData } from "@/types";
 import instance from "@/lib/api";
-import ChatWindow from "@/app/_components/ChatWindow";
-import StatusWindow from "@/app/_components/StatusWindow";
+import ChatWindow from "@/app/_components/ChatWindow/ChatWindow";
+import StatusWindow from "@/app/_components/StatusWindow/StatusWindow";
 
 const getStatus = async (thread: string): Promise<StatusData> => {
   "use cache";
