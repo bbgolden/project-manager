@@ -1,2 +1,8 @@
-## Package management with ```uv```
-To install ```uv```, run ```powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"```. Project files can be run using ```uv run filename``` which will automatically install dependencies from ```uv.lock```.
+## Project manager app
+This webapp replicates some of the functions of a commercial product manager with functions like timeline tracking, project building, and assigning requirements. It functions using locally-hosted Agentic AI built in the LangGraph framework.
+
+### ```/backend```
+The backend code for the website, built in Python. Subdirectories include code for various nodes in the agentic framework.
+
+### ```/frontend```
+React code for the site's frontend, built in the Next.js framework. Pages are located in ```/frontend/src/app```
