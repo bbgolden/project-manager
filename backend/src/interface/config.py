@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 
 load_dotenv()
 
-model = ChatOllama(model="llama3.1:8b")
+model = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.8)
