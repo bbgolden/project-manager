@@ -222,7 +222,7 @@ def finish_execution(tool_call_id: Annotated[str, InjectedToolCallId]):
 context_builder_tools = [get_analysis_context]
 context_builder = model.bind_tools(context_builder_tools)
 
-analyst_tools = [get_project_requirements, get_tasks, get_dependent_tasks, get_all_resources, get_resources_by_assignment, finish_execution]
+analyst_tools = [get_analysis_context, get_project_requirements, get_tasks, get_dependent_tasks, get_all_resources, get_resources_by_assignment, finish_execution]
 analyst = model.bind_tools(analyst_tools)
 
 def analysis_context(state: AnalystState, config: RunnableConfig) -> Command[Literal["clarification", "context_tools", "dialogue"]]:
@@ -273,6 +273,8 @@ def analysis_dialogue(state: AnalystState, config: RunnableConfig) -> Command[Li
         Do not come up with your own arguments (e.g. task names, resource names, etc.)
 
         If the user does not specify values for a parameter (e.g. they do not mention any task names when searching for tasks), do not pass an argument to that parameter.
+
+        The user may ask about a project different than the one you have context for. If this is the case, retrieve the context for the new project.
 
         Once the user has made it clear that they want to ask no more questions, finish execution.
         Do not ask any followup questions past this point.
