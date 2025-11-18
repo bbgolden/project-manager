@@ -10,7 +10,7 @@ def get_invalid_values[T](vals_to_check: list[T], existing_vals: list[T]) -> lis
 
     return invalid_vals
 
-def clarify_subgraph_input(state: SubgraphState) -> Command[Literal["context", "dialogue"]]:
+def clarify_subgraph_input(state: SubgraphState) -> Command[Literal["dialogue"]]:
     new_request = interrupt(state.followup)
 
     return Command(

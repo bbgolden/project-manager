@@ -8,6 +8,7 @@ from langgraph.types import Command
 from langgraph.graph import StateGraph
 from interface.config import model
 from interface.core.schemas import TaskMakerState, SubgraphOutputState
+from interface.core.templates import SUBAGENT_PROMPT_GENERIC
 from interface.utils._db_utils import execute, select
 from interface.utils._agent_utils import clarify_subgraph_input, compile_action_data
 
@@ -16,13 +17,15 @@ def get_task_context(tool_call_id: Annotated[str, InjectedToolCallId], project_n
     """Retrieves necessary context for the project which the new task belongs to."""
     existing_projects = [project for project, in select("SELECT name FROM public.projects")]
     if project_name not in existing_projects:
-        raise ValueError(f"Project with name {project_name} does not exist. Please enter a valid project. Existing projects are: {", ".join(existing_projects)}.")
+        raise ValueError(f"Project with name {project_name} does not exist. Please enter a valid project."
+                         + f" Existing projects are: {", ".join(existing_projects)}.")
     
     existing_tasks = [task for task, in select("SELECT name FROM public.tasks")]
     project_desc = select("SELECT description FROM public.projects WHERE name = !p1", project_name)[0][0]
 
     return Command(update={
-        "messages": [ToolMessage(f"New task belongs to project with (name: {project_name}) and (description: {project_desc})", tool_call_id=tool_call_id)],
+        "messages": [ToolMessage(f"New task belongs to project with (name: {project_name}) and"
+                                 + f" (description: {project_desc})", tool_call_id=tool_call_id)],
         "existing_projects": existing_projects,
         "existing_tasks": existing_tasks,
         "project_name": project_name,
@@ -43,10 +46,10 @@ def add_task(
     task_description: str | None = "",
 ):
     """Loads provided information into a new task to be created."""
-    vtask_name = task_name if task_name else current_name
-    vtask_desc = task_description if task_description else current_desc
-    vstart = start_date if start_date else current_start
-    vend = end_date if end_date else current_end
+    vtask_name = task_name or current_name
+    vtask_desc = task_description or current_desc
+    vstart = start_date or current_start
+    vend = end_date or current_end
 
     if vtask_name in existing_tasks:
         raise ValueError(f"Task with name {vtask_name} already exists. Please enter a valid task name.")
@@ -73,69 +76,74 @@ def finish_execution(tool_call_id: Annotated[str, InjectedToolCallId]):
         "finish": True,
     })
 
-context_builder_tools = [get_task_context]
-context_builder = model.bind_tools(context_builder_tools)
+@tool
+def cancel(tool_call_id: Annotated[str, InjectedToolCallId]):
+    """Cancels execution of the current task creation dialogue."""
+    return Command(update={
+        "messages": [ToolMessage("Cancelling current task creation dialogue.", tool_call_id=tool_call_id)],
+        "cancel": True
+    })
 
-task_maker_tools = [add_task, finish_execution]
+task_maker_tools = [get_task_context, add_task, finish_execution, cancel]
 task_maker = model.bind_tools(task_maker_tools)
 
-def create_task_context(state: TaskMakerState, config: RunnableConfig) -> Command[Literal["clarification", "context_tools", "dialogue"]]:
-    if state.project_name and state.project_name in state.existing_projects:
-        return Command(goto="dialogue")
-    
-    system_prompt = SystemMessage(
-        """
-        You are in a direct dialogue with the user helping them to add a task to an existing project.
-        Speak in the second person, as if in conversation with the user.
-        Your only job is to identify the name of the project that the task belongs to.
-        This job is internal to the application and should not be mentioned to the user.
-
-        The project name that the user enters must be an existing project.
-        Ask the user for a new project name if they enter one that does not exist. The new name is the one you should refer to at all times.
-
-        If the user only mentions that they would like to add a new task, you must assume that you do not yet have the project name.
-
-        Once you have gathered the correct project name, finish execution. 
-        Do not send any message to the user at this point.
-        """
-    )
-    response = context_builder.invoke([system_prompt] + state.messages, config=config)
-    
-    return Command(
-        update={
-            "messages": [response],
-            "redirect": "context",
-            "followup": response.content,
-        }, goto="context_tools" if response.tool_calls else "clarification",
-    )
-
 def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "commit"]]:
-    if state.finish:
+    if state.cancel:
+        return Command(graph=Command.PARENT, goto="liaison")
+    elif state.finish:
         return Command(goto="commit")
     
-    system_prompt = SystemMessage(
-        f"""
-        You are in a direct dialogue with the user, helping them to add a new task to a project as part of a project management application.
-        Speak in the second person, as if in conversation with the user.
-        A task is an objective to be completed in a project.
-        A task has a name (required), description (optional), start date (required), and end date(optional).
-        The task you are currently creating belongs to a parent project called {state.project_name}.
-        This project has the following description (note that this is not the task description): {state.project_desc}
+    TASK_PARAMS = """
+    1. project_name: The name of the project that this task belongs to. Must be an existing project.
+    2. task_name: The name of the task to be created. Cannot be the same as an existing task name.
+    3. task_description (OPTIONAL): The description of the task. May involve details like operational
+       duties, specific goals for task completion, etc.
+    4. start_date: The date on which the task is to start in YYYY-MM-DD format.
+    5. end_date (OPTIONAL): The date on which the task is to be ended in YYYY-MM-DD format.
+    """
 
-        Using your knowledge of the task's parent project, help the user to add the task.
-        You must not add any details that the user does not explicitly mention, such as specific names.
+    TASK_TOOLS = """
+    3. get_task_context
+        - DESCRIPTION: retrieve information about existing projects, existing tasks, and the project
+          that this new task is to belong to. These will be useful when validating the information for 
+          the new task.
+        - PARAMETER: project_name - the name of the project that this new task is to belong to.
+    4. add_task 
+        - DESCRIPTION: store the information that you currently have about the new task. This tool 
+          can and should be called multiple times as the user provides more of the appropriate data.
+        - PARAMETER: task_name - the name of the new task.
+        - PARAMETER: task_description (OPTIONAL) - the description of the new task.
+        - PARAMETER: start_date - the date on which the new task is to start.
+        - PARAMETER: end_date (OPTIONAL) - the date on which the new task is to end.
+    """
 
-        The task's name must be quoted directly from the user's messages and must be formatted in title case.
-        The task description must be formatted as a properly capitalized and punctuated paragraph that could be read without additional context. It should be in the third-person.
-        If the user provides any dates in terms relative to today, use your knowledge of today's date (which is {date.today().strftime("%Y-%m-%d")}) to approximate the true values of these dates.
-        The task's start date must be formatted as YYYY-MM-DD. If the user does not specify a start date, assume that it is today's date. You must ask the user for the task's start date.
-        The task's end date must also be formatted as YYYY-MM-DD. You must ask the user for the task's end date, but it is permissible that they do not provide it.
+    existing_projects = state.existing_projects or [project for project, in select("SELECT name from public.projects")]
 
-        Once you have confirmed that the task has been added, finish execution.
-        Do not ask any followup questions at this point.
-        You are not permitted to tell the user that the task has been added. You may only provide the information you have and ask for confirmation that it is correct.
-        """
-    )
+    TASK_INSTR = f"""
+    1. Determine the name of the project that the user wants to add a new task to. If the project name
+       the user provides does not exist, it is considered invalid and you must ask for a new one. 
+       After determining the project name, you must fetch the context for this project.
+        a. This is a list of all existing projects: {existing_projects}
+    2. Determine the name of the task to be created. If the task name the user provides already
+       exists, it is considered invalid and you must ask for a new one.
+        a. This is a list of all existing tasks: {state.existing_tasks}
+    3. Prompt the user for a task description. It is permissible that they do not provide one.
+    4. Determine the start date of the task to be created. If the user does not explicitly provide
+       one, assume that today's date ({date.today().strftime("%Y-%m-%d")}) is the start date.
+    5. Prompt the user for an end date for the task. It is permissible that they do not provide one.
+       They may also provide one in terms relative to today. In this case, do your best to estimate
+       their intended end date and confirm with them that you have the correct date.
+    6. Present the information you have to the user to confirm that it is correct. Once any necessary
+       adjustments have been made, you shall end this task creation function.
+    """
+
+    system_prompt = SystemMessage(SUBAGENT_PROMPT_GENERIC.format(
+        subagent="Task Maker",
+        subagent_tasks="Create tasks that belong to existing projects.",
+        params=TASK_PARAMS,
+        tools=TASK_TOOLS,
+        instructions=TASK_INSTR,
+    ))
     response = task_maker.invoke([system_prompt] + state.messages, config=config)
 
     return Command(
@@ -156,14 +164,11 @@ def create_task_commit(state: TaskMakerState) -> SubgraphOutputState:
 task_maker_workflow = StateGraph(TaskMakerState, output=SubgraphOutputState)
 
 task_maker_workflow.add_node("clarification", clarify_subgraph_input)
-task_maker_workflow.add_node("context", create_task_context)
-task_maker_workflow.add_node("context_tools", ToolNode(context_builder_tools))
 task_maker_workflow.add_node("dialogue", create_task_dialogue)
 task_maker_workflow.add_node("dialogue_tools", ToolNode(task_maker_tools))
 task_maker_workflow.add_node("commit", create_task_commit)
 
-task_maker_workflow.set_entry_point("context")
-task_maker_workflow.add_edge("context_tools", "context")
+task_maker_workflow.set_entry_point("dialogue")
 task_maker_workflow.add_edge("dialogue_tools", "dialogue")
 task_maker_workflow.set_finish_point("commit")
 

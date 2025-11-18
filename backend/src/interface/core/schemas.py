@@ -79,6 +79,7 @@ class SubgraphState(SubgraphOutputState):
     redirect: str | None = None
     followup: str | None = None
     finish: bool = False
+    cancel: bool = False
 
 # Subgraph-specific graph states
 

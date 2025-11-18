@@ -115,13 +115,11 @@ def create_task(state: OverallState) -> OverallState:
 
     action = response["action"]
 
-    return {
-        "messages": [AIMessage(
-            TASK_MAKER_OUTPUT.format_map(action.params)
-        )],
+    return Command(update={
+        "messages": [AIMessage(TASK_MAKER_OUTPUT.format_map(action.params))],
         "prev": "adding a new task",
-        "actions_taken": [action]
-    }
+        "actions_taken": [action],
+    }, goto="suggestion")
 
 def create_dep(state: OverallState) -> OverallState:
     response = dep_maker_agent.invoke({"messages": state.messages})
