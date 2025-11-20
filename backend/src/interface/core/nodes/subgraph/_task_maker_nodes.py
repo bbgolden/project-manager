@@ -42,7 +42,7 @@ def add_task(
     current_end: Annotated[str, InjectedState("end_date")],
     tool_call_id: Annotated[str, InjectedToolCallId],
     task_name: str,
-    start_date: str = date.today().strftime("%Y-%m-%d"),
+    start_date: str,
     end_date: str | None = "",
     task_description: str | None = "",
 ):
@@ -93,66 +93,19 @@ def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Comma
         return Command(graph=Command.PARENT, goto="liaison")
     elif state.finish:
         return Command(goto="commit")
-    
-    TASK_CONTEXT = f"""
-    The task you are making belongs to an existing project. To help you further understand this project's 
-    specific context, here are some key details. Use these to inform your interactions with the user.
-    - Project Name: {state.project_name or "Not yet retrieved"}
-    - Project Description: {state.project_desc or "Not yet retrieved"}
-    """
-
-    TASK_PARAMS = """
-    1. project_name: The name of the project that this task belongs to. Must be an existing project.
-    2. task_name: The name of the task to be created. Cannot be the same as an existing task name in 
-       the same project.
-    3. task_description (OPTIONAL): The description of the task. May involve details like operational
-       duties, specific goals for task completion, etc.
-    4. start_date: The date on which the task is to start in YYYY-MM-DD format.
-    5. end_date (OPTIONAL): The date on which the task is to be ended in YYYY-MM-DD format.
-    """
-
-    TASK_TOOLS = """
-    3. get_task_context
-        - DESCRIPTION: retrieve information about existing projects, existing tasks, and the project
-          that this new task is to belong to. These will be useful when validating the information for 
-          the new task.
-        - PARAMETER: project_name - the name of the project that this new task is to belong to.
-    4. add_task 
-        - DESCRIPTION: store the information that you currently have about the new task. This tool 
-          can and should be called multiple times as the user provides more of the appropriate data.
-        - PARAMETER: task_name - the name of the new task.
-        - PARAMETER: task_description (OPTIONAL) - the description of the new task.
-        - PARAMETER: start_date - the date on which the new task is to start.
-        - PARAMETER: end_date (OPTIONAL) - the date on which the new task is to end.
-    """
 
     existing_projects = state.existing_projects or [project for project, in select("SELECT name from public.projects")]
-
-    TASK_INSTR = f"""
-    1. Determine the name of the project that the user wants to add a new task to. If the project name
-       the user provides does not exist, it is considered invalid and you must ask for a new one. 
-       After determining the project name, you must fetch the context for this project.
-        a. This is a list of all existing projects: {existing_projects}
-    2. Determine the name of the task to be created. If the task name the user provides already
-       exists, it is considered invalid and you must ask for a new one.
-        a. This is a list of all existing tasks: {state.existing_tasks}
-    3. Prompt the user for a task description. It is permissible that they do not provide one.
-    4. Determine the start date of the task to be created. If the user does not explicitly provide
-       one, assume that today's date ({date.today().strftime("%Y-%m-%d")}) is the start date.
-    5. Prompt the user for an end date for the task. It is permissible that they do not provide one.
-       They may also provide one in terms relative to today. In this case, do your best to estimate
-       their intended end date and confirm with them that you have the correct date.
-    6. Present the information you have to the user to confirm that it is correct. Once any necessary
-       adjustments have been made, you shall end this task creation function.
-    """
 
     system_prompt = SystemMessage(SUBAGENT_PROMPT_GENERIC.format(
         subagent="Task Maker",
         subagent_tasks="Create tasks that belong to existing projects.",
-        subagent_context=TASK_CONTEXT,
+        subagent_context=TASK_CONTEXT.format(project_name=state.project_name or "Not yet available",
+                                             project_desc=state.project_desc or "Not yet available"),
         params=TASK_PARAMS,
         tools=TASK_TOOLS,
-        instructions=TASK_INSTR,
+        instructions=TASK_INSTR.format(existing_projects=existing_projects,
+                                       existing_tasks=state.existing_tasks,
+                                       today=date.today().strftime("%Y-%m-%d")),
     ))
     response = task_maker.invoke([system_prompt] + state.messages, config=config)
 
@@ -182,3 +135,54 @@ task_maker_workflow.add_edge("dialogue_tools", "dialogue")
 task_maker_workflow.set_finish_point("commit")
 
 task_maker_agent = task_maker_workflow.compile()
+
+# prompting
+TASK_CONTEXT = """
+The task you are making belongs to an existing project. To help you further understand this project's 
+specific context, here are some key details. Use these to inform your interactions with the user.
+- Project Name: {project_name}
+- Project Description: {project_desc}
+"""
+
+TASK_PARAMS = """
+1. project_name: The name of the project that this task belongs to. Must be an existing project.
+2. task_name: The name of the task to be created. Cannot be the same as an existing task name in 
+    the same project.
+3. task_description (OPTIONAL): The description of the task. May involve details like operational
+    duties, specific goals for task completion, etc.
+4. start_date: The date on which the task is to start in YYYY-MM-DD format.
+5. end_date (OPTIONAL): The date on which the task is to be ended in YYYY-MM-DD format.
+"""
+
+TASK_TOOLS = """
+3. get_task_context
+    - DESCRIPTION: retrieve information about existing projects, existing tasks, and the project
+        that this new task is to belong to. These will be useful when validating the information for 
+        the new task.
+    - PARAMETER: project_name - the name of the project that this new task is to belong to.
+4. add_task 
+    - DESCRIPTION: store the information that you currently have about the new task. This tool 
+        can and should be called multiple times as the user provides more of the appropriate data.
+    - PARAMETER: task_name - the name of the new task.
+    - PARAMETER: task_description (OPTIONAL) - the description of the new task.
+    - PARAMETER: start_date - the date on which the new task is to start.
+    - PARAMETER: end_date (OPTIONAL) - the date on which the new task is to end.
+"""
+
+TASK_INSTR = """
+1. Determine the name of the project that the user wants to add a new task to. If the project name
+    the user provides does not exist, it is considered invalid and you must ask for a new one. 
+    After determining the project name, you must fetch the context for this project.
+    a. This is a list of all existing projects: {existing_projects}
+2. Determine the name of the task to be created. If the task name the user provides already
+    exists, it is considered invalid and you must ask for a new one.
+    a. This is a list of all existing tasks: {existing_tasks}
+3. Prompt the user for a task description. It is permissible that they do not provide one.
+4. Determine the start date of the task to be created. If the user does not explicitly provide
+    one, assume that today's date ({today}) is the start date.
+5. Prompt the user for an end date for the task. It is permissible that they do not provide one.
+    They may also provide one in terms relative to today. In this case, do your best to estimate
+    their intended end date and confirm with them that you have the correct date.
+6. Present the information you have to the user to confirm that it is correct. Once any necessary
+    adjustments have been made, you shall end this task creation function.
+"""
