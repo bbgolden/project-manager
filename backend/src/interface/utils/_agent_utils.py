@@ -28,8 +28,7 @@ def compile_action_data(name: str, state: SubgraphState) -> Action:
         except KeyError:
             continue
 
-        if (
-            type(annot) is param_flag
+        if (type(annot) is param_flag
             and hasattr(annot, "__metadata__")
             and "__action_param__" in annot.__metadata__
         ):

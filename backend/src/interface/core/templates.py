@@ -64,6 +64,8 @@ follow-up questions. Note that some of these parameters are optional, either bec
 unnecessary for the current project management function or because they user explicitly makes clear
 that they would like to omit them. Refer to the "Tools" section for information on the tools
 at your disposal and their use cases.
+
+{subagent_context}
 </ Background>
 
 < Parameters >

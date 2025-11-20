@@ -20,14 +20,15 @@ def get_task_context(tool_call_id: Annotated[str, InjectedToolCallId], project_n
         raise ValueError(f"Project with name {project_name} does not exist. Please enter a valid project."
                          + f" Existing projects are: {", ".join(existing_projects)}.")
     
-    existing_tasks = [task for task, in select("SELECT name FROM public.tasks")]
-    project_desc = select("SELECT description FROM public.projects WHERE name = !p1", project_name)[0][0]
+    project_id, project_desc = select("SELECT project_id, description FROM public.projects WHERE name = !p1", project_name)[0]
+    existing_tasks = [task for task, in select("SELECT name FROM public.tasks WHERE project_id = !p1", project_id)]
 
     return Command(update={
         "messages": [ToolMessage(f"New task belongs to project with (name: {project_name}) and"
                                  + f" (description: {project_desc})", tool_call_id=tool_call_id)],
         "existing_projects": existing_projects,
         "existing_tasks": existing_tasks,
+        "project_id": project_id,
         "project_name": project_name,
         "project_desc": project_desc,
     })
@@ -81,7 +82,7 @@ def cancel(tool_call_id: Annotated[str, InjectedToolCallId]):
     """Cancels execution of the current task creation dialogue."""
     return Command(update={
         "messages": [ToolMessage("Cancelling current task creation dialogue.", tool_call_id=tool_call_id)],
-        "cancel": True
+        "cancel": True,
     })
 
 task_maker_tools = [get_task_context, add_task, finish_execution, cancel]
@@ -93,9 +94,17 @@ def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Comma
     elif state.finish:
         return Command(goto="commit")
     
+    TASK_CONTEXT = f"""
+    The task you are making belongs to an existing project. To help you further understand this project's 
+    specific context, here are some key details. Use these to inform your interactions with the user.
+    - Project Name: {state.project_name or "Not yet retrieved"}
+    - Project Description: {state.project_desc or "Not yet retrieved"}
+    """
+
     TASK_PARAMS = """
     1. project_name: The name of the project that this task belongs to. Must be an existing project.
-    2. task_name: The name of the task to be created. Cannot be the same as an existing task name.
+    2. task_name: The name of the task to be created. Cannot be the same as an existing task name in 
+       the same project.
     3. task_description (OPTIONAL): The description of the task. May involve details like operational
        duties, specific goals for task completion, etc.
     4. start_date: The date on which the task is to start in YYYY-MM-DD format.
@@ -140,6 +149,7 @@ def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Comma
     system_prompt = SystemMessage(SUBAGENT_PROMPT_GENERIC.format(
         subagent="Task Maker",
         subagent_tasks="Create tasks that belong to existing projects.",
+        subagent_context=TASK_CONTEXT,
         params=TASK_PARAMS,
         tools=TASK_TOOLS,
         instructions=TASK_INSTR,
@@ -155,9 +165,8 @@ def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Comma
     )
 
 def create_task_commit(state: TaskMakerState) -> SubgraphOutputState:
-    project_id = select("SELECT project_id FROM public.projects WHERE name = !p1", state.project_name)[0][0]
-
-    execute("INSERT INTO public.tasks(project_id, name, description, start, \"end\") VALUES(!p1, !p2, !p3, !p4, !p5)", project_id, state.task_name, state.task_desc, state.start_date, state.end_date)
+    execute("INSERT INTO public.tasks(project_id, name, description, start, \"end\") VALUES(!p1, !p2, !p3, !p4, !p5)", 
+            state.project_id, state.task_name, state.task_desc, state.start_date, state.end_date)
 
     return {"action": compile_action_data("task_maker", state)}
 

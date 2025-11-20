@@ -97,6 +97,7 @@ class ReqMakerState(SubgraphState):
 class TaskMakerState(SubgraphState):
     existing_projects: list[str] = []
     existing_tasks: list[str] = []
+    project_id: int = -1
     project_name: Annotated[str, "__action_param__"] = ""
     project_desc: str = ""
     task_name: Annotated[str, "__action_param__"] = ""
