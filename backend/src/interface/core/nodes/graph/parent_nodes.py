@@ -31,7 +31,9 @@ tool_to_direction = {
 }
 
 def assign_workflow(state: OverallState, config: RunnableConfig) -> Command[Literal["supervisor", "clarification"]]:
-    new_messages = [HumanMessage(state.user_input)]
+    new_messages = []
+    if(state.user_input):
+        new_messages.append(HumanMessage(state.user_input))
 
     system_prompt = SystemMessage(
         """
@@ -63,6 +65,7 @@ def assign_workflow(state: OverallState, config: RunnableConfig) -> Command[Lite
 
     return Command(
         update={
+            "user_input": "",
             "messages": new_messages,
             "tool_queue": tool_queue,
             "prev": "liaison",

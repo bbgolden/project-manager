@@ -14,7 +14,15 @@ from interface.utils._agent_utils import clarify_subgraph_input, compile_action_
 
 @tool
 def get_task_context(tool_call_id: Annotated[str, InjectedToolCallId], project_name: str):
-    """Retrieves necessary context for the project which the new task belongs to."""
+    """
+    DESCRIPTION: 
+    Retrieve information about existing projects, existing tasks, and the project
+    that this new task is to belong to. These will be useful when validating the information for 
+    the new task.
+
+    PARAMETERS: 
+    - project_name: The name of the project that this new task is to belong to.
+    """
     existing_projects = [project for project, in select("SELECT name FROM public.projects")]
     if project_name not in existing_projects:
         raise ValueError(f"Project with name {project_name} does not exist. Please enter a valid project."
@@ -46,7 +54,17 @@ def add_task(
     end_date: str | None = "",
     task_description: str | None = "",
 ):
-    """Loads provided information into a new task to be created."""
+    """
+    DESCRIPTION: 
+    Store the information that you currently have about the new task. This tool 
+    can and should be called multiple times as the user provides more of the appropriate data.
+
+    PARAMETERS: 
+    - task_name - The name of the new task.
+    - task_description (OPTIONAL): The description of the new task.
+    - start_date: The date on which the new task is to start.
+    - end_date (OPTIONAL): The date on which the new task is to end.
+    """
     vtask_name = task_name or current_name
     vtask_desc = task_description or current_desc
     vstart = start_date or current_start
@@ -71,7 +89,14 @@ def add_task(
 
 @tool
 def finish_execution(tool_call_id: Annotated[str, InjectedToolCallId]):
-    """Finishes execution of the current portion of the task creation dialogue."""
+    """
+    DESCRIPTION:
+    Indicate that all necessary information has been received and stored and that
+    this task creation function has been successfully completed.
+
+    PARAMETERS:
+    This tool has no parameters.
+    """
     return Command(update={
         "messages": [ToolMessage(f"Execution of current node complete. Moving to next node.", tool_call_id=tool_call_id)],
         "finish": True,
@@ -79,7 +104,15 @@ def finish_execution(tool_call_id: Annotated[str, InjectedToolCallId]):
 
 @tool
 def cancel(tool_call_id: Annotated[str, InjectedToolCallId]):
-    """Cancels execution of the current task creation dialogue."""
+    """
+    DESCRIPTION: 
+    Indicate that the user has expressed the desire to cancel the current task
+    creation function. This will return the user to the project management function selection
+    portion of the dialogue.
+
+    PARAMETERS:
+    This tool has no parameters.
+    """
     return Command(update={
         "messages": [ToolMessage("Cancelling current task creation dialogue.", tool_call_id=tool_call_id)],
         "cancel": True,
@@ -90,7 +123,10 @@ task_maker = model.bind_tools(task_maker_tools)
 
 def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Command[Literal["clarification", "dialogue_tools", "commit"]]:
     if state.cancel:
-        return Command(graph=Command.PARENT, goto="liaison")
+        HUMAN_CANCEL_MESSAGE_INDEX = -3
+
+        return Command(graph=Command.PARENT, goto="liaison", 
+                       update={"messages": [state.messages[HUMAN_CANCEL_MESSAGE_INDEX]]})
     elif state.finish:
         return Command(goto="commit")
 
@@ -102,7 +138,6 @@ def create_task_dialogue(state: TaskMakerState, config: RunnableConfig) -> Comma
         subagent_context=TASK_CONTEXT.format(project_name=state.project_name or "Not yet available",
                                              project_desc=state.project_desc or "Not yet available"),
         params=TASK_PARAMS,
-        tools=TASK_TOOLS,
         instructions=TASK_INSTR.format(existing_projects=existing_projects,
                                        existing_tasks=state.existing_tasks,
                                        today=date.today().strftime("%Y-%m-%d")),
@@ -137,14 +172,16 @@ task_maker_workflow.set_finish_point("commit")
 task_maker_agent = task_maker_workflow.compile()
 
 # prompting
-TASK_CONTEXT = """
+TASK_CONTEXT = (
+"""
 The task you are making belongs to an existing project. To help you further understand this project's 
 specific context, here are some key details. Use these to inform your interactions with the user.
 - Project Name: {project_name}
 - Project Description: {project_desc}
-"""
+""")
 
-TASK_PARAMS = """
+TASK_PARAMS = (
+"""
 1. project_name: The name of the project that this task belongs to. Must be an existing project.
 2. task_name: The name of the task to be created. Cannot be the same as an existing task name in 
     the same project.
@@ -152,24 +189,9 @@ TASK_PARAMS = """
     duties, specific goals for task completion, etc.
 4. start_date: The date on which the task is to start in YYYY-MM-DD format.
 5. end_date (OPTIONAL): The date on which the task is to be ended in YYYY-MM-DD format.
-"""
+""")
 
-TASK_TOOLS = """
-3. get_task_context
-    - DESCRIPTION: retrieve information about existing projects, existing tasks, and the project
-        that this new task is to belong to. These will be useful when validating the information for 
-        the new task.
-    - PARAMETER: project_name - the name of the project that this new task is to belong to.
-4. add_task 
-    - DESCRIPTION: store the information that you currently have about the new task. This tool 
-        can and should be called multiple times as the user provides more of the appropriate data.
-    - PARAMETER: task_name - the name of the new task.
-    - PARAMETER: task_description (OPTIONAL) - the description of the new task.
-    - PARAMETER: start_date - the date on which the new task is to start.
-    - PARAMETER: end_date (OPTIONAL) - the date on which the new task is to end.
-"""
-
-TASK_INSTR = """
+TASK_INSTR = ("""
 1. Determine the name of the project that the user wants to add a new task to. If the project name
     the user provides does not exist, it is considered invalid and you must ask for a new one. 
     After determining the project name, you must fetch the context for this project.
@@ -185,4 +207,7 @@ TASK_INSTR = """
     their intended end date and confirm with them that you have the correct date.
 6. Present the information you have to the user to confirm that it is correct. Once any necessary
     adjustments have been made, you shall end this task creation function.
-"""
+7. Throughout the conversation, the user may either implicitly or explicitly make clear that they want
+    to stop this task creation function and instead choose another project management function. If so,
+    you shall cancel this task creation function.
+""")

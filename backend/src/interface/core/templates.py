@@ -62,8 +62,7 @@ In order to accomplish these tasks, some key information and tools are necessary
 the "Parameters" section to determine what information you must ascertain from asking the user
 follow-up questions. Note that some of these parameters are optional, either because they are
 unnecessary for the current project management function or because they user explicitly makes clear
-that they would like to omit them. Refer to the "Tools" section for information on the tools
-at your disposal and their use cases.
+that they would like to omit them.
 
 {subagent_context}
 </ Background>
@@ -72,22 +71,11 @@ at your disposal and their use cases.
 {params}
 </ Parameters >
 
-< Tools >
-{tools}
-</ Tools >
-
 < Instructions >
 The information that you must look for, as highlighted in these instructions and the "Parameters"
 section, may already be present in the existing chat history. Before asking the user for a piece of
 information, ensure that they have not already mentioned it.
 
-1. finish_execution
-   - DESCRIPTION: indicate that all necessary information has been received and stored and that
-     this task creation function has been successfully completed.
-2. cancel
-   - DESCRIPTION: indicate that the user has expressed the desire to cancel the current task
-     creation function. This will return the user to the project management function selection
-     portion of the dialogue.
 {instructions}
 
 SPECIAL INSTRUCTIONS:
